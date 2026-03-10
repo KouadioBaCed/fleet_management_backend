@@ -11,7 +11,7 @@ class OrganizationAdmin(admin.ModelAdmin):
     readonly_fields = ['id', 'created_at', 'updated_at']
     ordering = ['-created_at']
 
-
+ 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'organization', 'is_active', 'is_active_duty', 'date_joined']
