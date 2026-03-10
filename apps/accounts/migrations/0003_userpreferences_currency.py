@@ -15,13 +15,9 @@ class Migration(migrations.Migration):
             name='currency',
             field=models.CharField(
                 choices=[
-                    ('USD', 'Dollar américain ($)'),
-                    ('EUR', 'Euro (€)'),
-                    ('CDF', 'Franc congolais (FC)'),
-                    ('XAF', 'Franc CFA (FCFA)'),
-                    ('GBP', 'Livre sterling (£)'),
+                    ('XOF', 'Franc CFA (FCFA)'),
                 ],
-                default='USD',
+                default='XOF',
                 max_length=10,
                 verbose_name='Devise'
             ),

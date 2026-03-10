@@ -95,7 +95,7 @@ class DriverPerformanceService:
 
         # === Score de performance global ===
         # Pondération:
-        # - Note client: 30%
+        # - Note système (calculée auto): 30%
         # - Taux de complétion: 25%
         # - Ponctualité: 25%
         # - Sécurité (inverse du taux d'incidents): 20%
@@ -146,6 +146,58 @@ class DriverPerformanceService:
             'fuel_efficiency': fuel_efficiency,
             'performance_score': performance_score,
         }
+
+    @staticmethod
+    def compute_driver_rating(driver) -> Decimal:
+        """
+        Calcule automatiquement la note (sur 5) d'un chauffeur basée sur :
+        - Taux de complétion des missions (40%)
+        - Ponctualité : missions terminées dans les délais (40%)
+        - Sécurité : inverse du taux d'incidents (20%)
+
+        Appelé automatiquement à chaque mission terminée ou annulée.
+        """
+        missions = Mission.objects.filter(driver=driver)
+        total = missions.exclude(status='cancelled').count()
+
+        if total == 0:
+            return Decimal('0')
+
+        completed = missions.filter(status='completed').count()
+
+        # Taux de complétion (missions terminées / missions non annulées)
+        completion_rate = completed / total
+
+        # Ponctualité (missions terminées dans les délais / missions terminées)
+        on_time = missions.filter(
+            status='completed',
+            actual_end__lte=F('scheduled_end')
+        ).count()
+        punctuality_rate = (on_time / completed) if completed > 0 else 0
+
+        # Sécurité (inverse du taux d'incidents par mission)
+        incidents_count = Incident.objects.filter(driver=driver).count()
+        incident_rate = incidents_count / total
+        safety_rate = max(0, 1 - incident_rate)
+
+        # Score pondéré (sur 1) puis ramené sur 5
+        score = (
+            completion_rate * 0.40 +
+            punctuality_rate * 0.40 +
+            safety_rate * 0.20
+        )
+        rating = round(Decimal(str(score * 5)), 2)
+
+        # Clamp entre 0 et 5
+        return max(Decimal('0'), min(Decimal('5'), rating))
+
+    @classmethod
+    def update_driver_rating(cls, driver) -> None:
+        """Recalcule et sauvegarde la note du chauffeur"""
+        new_rating = cls.compute_driver_rating(driver)
+        if driver.rating != new_rating:
+            driver.rating = new_rating
+            driver.save(update_fields=['rating', 'updated_at'])
 
     @classmethod
     def get_rankings(cls, organization=None, limit: int = 10, period_days: int = 30) -> list:

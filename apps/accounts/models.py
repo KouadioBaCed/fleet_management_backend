@@ -204,11 +204,7 @@ class UserPreferences(models.Model):
     )
 
     CURRENCY_CHOICES = [
-        ('USD', 'Dollar américain ($)'),
-        ('EUR', 'Euro (€)'),
-        ('CDF', 'Franc congolais (FC)'),
-        ('XAF', 'Franc CFA (FCFA)'),
-        ('GBP', 'Livre sterling (£)'),
+        ('XOF', 'Franc CFA (FCFA)'),
     ]
 
     # Unités
@@ -227,7 +223,7 @@ class UserPreferences(models.Model):
     currency = models.CharField(
         max_length=10,
         choices=CURRENCY_CHOICES,
-        default='USD',
+        default='XOF',
         verbose_name='Devise'
     )
 

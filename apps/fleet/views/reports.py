@@ -293,17 +293,17 @@ def reports_summary(request):
             'fuel_cost': {
                 'value': float(fuel_cost_current),
                 'change': round(float(fuel_cost_change), 1),
-                'unit': '$'
+                'unit': 'FCFA'
             },
             'maintenance_cost': {
                 'value': float(maintenance_cost_current),
                 'change': round(float(maintenance_cost_change), 1),
-                'unit': '$'
+                'unit': 'FCFA'
             },
             'total_cost': {
                 'value': float(total_cost),
                 'change': round(float(total_cost_change), 1),
-                'unit': '$'
+                'unit': 'FCFA'
             },
             'trips': {
                 'value': trips_count,

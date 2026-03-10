@@ -96,6 +96,11 @@ def track_mission_status_change(sender, instance, **kwargs):
                 }
             )
 
+        # Recalculer la note du chauffeur quand une mission est terminée ou annulée
+        if instance.status in ('completed', 'cancelled'):
+            from apps.fleet.services.driver_performance import DriverPerformanceService
+            DriverPerformanceService.update_driver_rating(instance.driver)
+
 
 # ============================================
 # TRAJETS
@@ -207,6 +212,11 @@ def track_incident_activity(sender, instance, created, **kwargs):
                 'address': instance.address,
             }
         )
+
+        # Recalculer la note du chauffeur (les incidents impactent la note)
+        if instance.driver:
+            from apps.fleet.services.driver_performance import DriverPerformanceService
+            DriverPerformanceService.update_driver_rating(instance.driver)
 
 
 @receiver(pre_save, sender=Incident)
