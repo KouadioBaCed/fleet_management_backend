@@ -81,6 +81,20 @@ class LiveTrackingConsumer(AsyncWebsocketConsumer):
                     }
                     last_update = last_point.recorded_at.isoformat()
 
+            # Fallback: utiliser la position d'origine si pas de point GPS
+            if current_position is None and mission.origin_latitude and mission.origin_longitude:
+                current_position = {
+                    'latitude': float(mission.origin_latitude),
+                    'longitude': float(mission.origin_longitude),
+                    'speed': 0,
+                    'heading': None,
+                    'is_moving': False,
+                    'battery_level': None,
+                }
+                last_update = mission.actual_start.isoformat() if mission.actual_start else (
+                    mission.scheduled_start.isoformat() if mission.scheduled_start else None
+                )
+
             # Calculer le statut de retard
             delay_status = self._calculate_delay(mission, now)
 
@@ -142,6 +156,46 @@ class LiveTrackingConsumer(AsyncWebsocketConsumer):
             'delay_minutes': delay_minutes,
             'severity': severity,
         }
+
+
+class NotificationConsumer(AsyncWebsocketConsumer):
+    """Consumer pour les notifications en temps reel des utilisateurs"""
+
+    async def connect(self):
+        user = self.scope.get('user')
+        if user and user.is_authenticated:
+            self.group_name = f'notifications_{user.id}'
+            await self.channel_layer.group_add(self.group_name, self.channel_name)
+            await self.accept()
+            await self.send(text_data=json.dumps({
+                'type': 'connection_established',
+                'message': 'Connecte aux notifications'
+            }))
+
+            # Envoyer le nombre de notifications non lues
+            unread_count = await self.get_unread_count(user.id)
+            await self.send(text_data=json.dumps({
+                'type': 'unread_count',
+                'count': unread_count
+            }))
+        else:
+            await self.close()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def notification_message(self, event):
+        """Recevoir et transmettre une notification au client"""
+        await self.send(text_data=json.dumps({
+            'type': 'new_notification',
+            'notification': event['notification']
+        }))
+
+    @database_sync_to_async
+    def get_unread_count(self, user_id):
+        from apps.fleet.models.notification import UserNotification
+        return UserNotification.objects.filter(user_id=user_id, is_read=False).count()
 
 
 class TripTrackingConsumer(AsyncWebsocketConsumer):

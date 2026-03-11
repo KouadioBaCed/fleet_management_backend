@@ -453,6 +453,19 @@ class MissionViewSet(viewsets.ModelViewSet):
                 }
                 last_update = last_point.recorded_at
 
+        # Fallback: utiliser la position d'origine de la mission si pas de point GPS
+        if current_position is None and mission.origin_latitude and mission.origin_longitude:
+            current_position = {
+                'latitude': float(mission.origin_latitude),
+                'longitude': float(mission.origin_longitude),
+                'speed': 0,
+                'heading': None,
+                'accuracy': 0,
+                'is_moving': False,
+                'battery_level': None,
+            }
+            last_update = mission.actual_start or mission.scheduled_start
+
         # Calculer le statut de retard
         delay_status = self._calculate_delay_status(mission, now)
 
@@ -760,6 +773,16 @@ class MissionViewSet(viewsets.ModelViewSet):
                         'is_moving': last_point.is_moving,
                     }
                     last_update = last_point.recorded_at
+
+            # Fallback: utiliser la position d'origine de la mission si pas de point GPS
+            if current_position is None and mission.origin_latitude and mission.origin_longitude:
+                current_position = {
+                    'latitude': float(mission.origin_latitude),
+                    'longitude': float(mission.origin_longitude),
+                    'speed': 0,
+                    'is_moving': False,
+                }
+                last_update = mission.actual_start or mission.scheduled_start
 
             # Statut de retard
             delay_status = self._calculate_delay_status(mission, now)

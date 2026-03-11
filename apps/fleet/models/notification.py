@@ -397,8 +397,59 @@ class NotificationService:
     # === Notifications pour les admins/superviseurs ===
 
     @staticmethod
+    def _send_incident_email(users_emails, incident):
+        """Envoyer un email d'alerte incident aux admins"""
+        from django.core.mail import send_mail
+        from django.conf import settings
+
+        if not users_emails:
+            return
+
+        severity_labels = {
+            'minor': 'Mineur',
+            'moderate': 'Modere',
+            'major': 'Majeur',
+            'critical': 'Critique',
+        }
+        severity_label = severity_labels.get(incident.severity, incident.severity)
+        vehicle_plate = incident.vehicle.license_plate if incident.vehicle else 'N/A'
+        driver_name = str(incident.driver) if incident.driver else 'N/A'
+        incident_type = incident.get_incident_type_display()
+        location = incident.address or f"{incident.latitude}, {incident.longitude}" if incident.latitude else 'Non specifie'
+
+        subject = f"[ALERTE] Incident {severity_label} - {incident_type} - {vehicle_plate}"
+
+        message = (
+            f"Un nouvel incident a ete signale.\n\n"
+            f"--- Details de l'incident ---\n"
+            f"Type : {incident_type}\n"
+            f"Gravite : {severity_label}\n"
+            f"Titre : {incident.title}\n"
+            f"Description : {incident.description}\n\n"
+            f"--- Vehicule & Conducteur ---\n"
+            f"Vehicule : {vehicle_plate}\n"
+            f"Conducteur : {driver_name}\n\n"
+            f"--- Localisation ---\n"
+            f"Adresse : {location}\n\n"
+            f"--- Date ---\n"
+            f"Signale le : {incident.reported_at.strftime('%d/%m/%Y a %H:%M') if incident.reported_at else 'N/A'}\n\n"
+            f"Connectez-vous a la plateforme pour plus de details et pour traiter cet incident."
+        )
+
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=users_emails,
+                fail_silently=True,
+            )
+        except Exception as e:
+            print(f"Erreur envoi email incident: {e}")
+
+    @staticmethod
     def notify_incident_reported(incident, users=None):
-        """Notifier les admins qu'un incident a ete signale"""
+        """Notifier les admins qu'un incident a ete signale (notification + email)"""
         from apps.accounts.models import User
 
         # Si pas d'utilisateurs specifies, notifier tous les admins de l'organisation
@@ -410,6 +461,8 @@ class NotificationService:
             )
 
         notifications = []
+        emails_to_notify = []
+
         for user in users:
             # Verifier les preferences de l'utilisateur
             prefs = getattr(user, 'preferences', None)
@@ -437,8 +490,15 @@ class NotificationService:
             )
             notifications.append(notification)
 
-            # Envoyer en temps reel
+            # Collecter les emails des admins
+            if user.email:
+                emails_to_notify.append(user.email)
+
+            # Envoyer en temps reel via WebSocket
             NotificationService._send_realtime_notification(user.id, notification.to_dict())
+
+        # Envoyer l'email d'alerte a tous les admins concernes
+        NotificationService._send_incident_email(emails_to_notify, incident)
 
         return notifications
 
