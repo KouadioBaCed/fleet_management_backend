@@ -36,6 +36,20 @@ class DriverListSerializer(serializers.ModelSerializer):
         ]
 
 
+class DriverCurrentMissionSerializer(serializers.Serializer):
+    """Serializer leger pour la mission en cours d'un chauffeur"""
+    id = serializers.IntegerField()
+    mission_code = serializers.CharField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    priority = serializers.CharField()
+    origin_address = serializers.CharField()
+    destination_address = serializers.CharField()
+    scheduled_start = serializers.DateTimeField()
+    scheduled_end = serializers.DateTimeField(allow_null=True)
+    actual_start = serializers.DateTimeField(allow_null=True)
+
+
 class DriverSerializer(serializers.ModelSerializer):
     """Serializer complet pour chauffeur"""
 
@@ -44,11 +58,22 @@ class DriverSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     is_available = serializers.BooleanField(read_only=True)
     is_on_mission = serializers.BooleanField(read_only=True)
+    current_mission = serializers.SerializerMethodField()
 
     class Meta:
         model = Driver
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'total_trips', 'total_distance']
+
+    def get_current_mission(self, obj):
+        from apps.fleet.models import Mission
+        mission = Mission.objects.filter(
+            driver=obj,
+            status__in=['in_progress', 'assigned']
+        ).order_by('-scheduled_start').first()
+        if mission:
+            return DriverCurrentMissionSerializer(mission).data
+        return None
 
 
 class DriverCreateSerializer(serializers.ModelSerializer):
@@ -120,8 +145,13 @@ class DriverCreateSerializer(serializers.ModelSerializer):
         phone_number = validated_data.pop('phone_number', '')
         photo = validated_data.pop('photo', None)
 
-        # Récupérer l'organisation depuis le contexte
-        organization = self.context.get('organization')
+        # Récupérer l'organisation: d'abord validated_data (via perform_create), sinon contexte
+        organization = validated_data.pop('organization', None) or self.context.get('organization')
+
+        if not organization:
+            raise serializers.ValidationError({
+                'organization': "Impossible de déterminer l'organisation. Contactez l'administrateur."
+            })
 
         # Créer l'utilisateur
         user = User.objects.create_user(

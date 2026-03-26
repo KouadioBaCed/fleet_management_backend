@@ -19,7 +19,7 @@ class UserNotificationViewSet(viewsets.ModelViewSet):
     """ViewSet pour gerer les notifications des utilisateurs (admin/superviseur)"""
     serializer_class = UserNotificationSerializer
     permission_classes = [IsAuthenticated, IsOrganizationMember]
-    http_method_names = ['get', 'delete']
+    http_method_names = ['get', 'post', 'delete']
 
     def get_queryset(self):
         """Retourner uniquement les notifications de l'utilisateur connecte"""
@@ -150,7 +150,7 @@ class DriverNotificationViewSet(viewsets.ModelViewSet):
     """ViewSet pour gerer les notifications des conducteurs"""
     serializer_class = DriverNotificationSerializer
     permission_classes = [IsAuthenticated]
-    http_method_names = ['get', 'delete']
+    http_method_names = ['get', 'post', 'delete']
 
     def get_queryset(self):
         """Retourner les notifications du conducteur associe a l'utilisateur"""

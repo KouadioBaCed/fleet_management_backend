@@ -4,11 +4,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db.models import Q, Count
-from apps.fleet.models import Mission
+from apps.fleet.models import Mission, MissionCheckpoint
 from apps.fleet.serializers import (
     MissionSerializer,
     MissionListSerializer,
-    MissionCreateSerializer
+    MissionCreateSerializer,
+    MissionCheckpointSerializer
 )
 from apps.accounts.permissions import IsOrganizationMember
 
@@ -23,7 +24,7 @@ class MissionViewSet(viewsets.ModelViewSet):
     - search: Recherche par titre, code mission, adresse, chauffeur ou véhicule
     - ordering: Tri (scheduled_start, -scheduled_start, created_at, -created_at, priority)
     """
-    queryset = Mission.objects.select_related('vehicle', 'driver', 'driver__user', 'created_by', 'trip').all()
+    queryset = Mission.objects.select_related('vehicle', 'driver', 'driver__user', 'created_by', 'trip').prefetch_related('checkpoints').all()
     permission_classes = [IsAuthenticated, IsOrganizationMember]
 
     def get_serializer_class(self):
@@ -47,6 +48,11 @@ class MissionViewSet(viewsets.ModelViewSet):
         # Les chauffeurs ne voient que leurs missions
         if user.is_driver:
             queryset = queryset.filter(driver__user=user)
+
+        # Filtrer par chauffeur (ID du driver)
+        driver_filter = self.request.query_params.get('driver')
+        if driver_filter:
+            queryset = queryset.filter(driver__id=driver_filter)
 
         # Filtrer par statut (supporte les valeurs separees par virgule)
         status_filter = self.request.query_params.get('status')
@@ -407,6 +413,21 @@ class MissionViewSet(viewsets.ModelViewSet):
                     if field in field_labels:
                         changes.append(field_labels[field])
 
+        # Gérer les checkpoints
+        if 'checkpoints' in request.data:
+            mission.checkpoints.all().delete()
+            for cp_data in request.data['checkpoints']:
+                MissionCheckpoint.objects.create(
+                    mission=mission,
+                    order=cp_data['order'],
+                    address=cp_data['address'],
+                    latitude=cp_data['latitude'],
+                    longitude=cp_data['longitude'],
+                    notes=cp_data.get('notes', ''),
+                )
+            if 'points de passage' not in changes:
+                changes.append('points de passage')
+
         if changes:
             mission.save()
 
@@ -511,6 +532,9 @@ class MissionViewSet(viewsets.ModelViewSet):
                 'latitude': float(mission.destination_latitude),
                 'longitude': float(mission.destination_longitude),
             },
+            'checkpoints': MissionCheckpointSerializer(
+                mission.checkpoints.all(), many=True
+            ).data,
             'schedule': {
                 'scheduled_start': mission.scheduled_start,
                 'scheduled_end': mission.scheduled_end,
@@ -603,7 +627,7 @@ class MissionViewSet(viewsets.ModelViewSet):
 
         alert_titles = {
             'start': "Retard au demarrage",
-            'progress': "Mission en retard",
+            'progress': "Mission accompli",
             'arrival': "Retard a l'arrivee",
         }
 
@@ -818,6 +842,18 @@ class MissionViewSet(viewsets.ModelViewSet):
                 'last_update': last_update,
                 'delay_status': delay_status,
                 'alerts_count': alerts_count,
+                'checkpoints': [
+                    {
+                        'id': cp.id,
+                        'order': cp.order,
+                        'address': cp.address,
+                        'latitude': float(cp.latitude),
+                        'longitude': float(cp.longitude),
+                        'notes': cp.notes or '',
+                    }
+                    for cp in mission.checkpoints.all().order_by('order')
+                ],
+                'checkpoint_count': mission.checkpoints.count(),
                 'scheduled_start': mission.scheduled_start,
                 'scheduled_end': mission.scheduled_end,
                 'actual_start': mission.actual_start,
@@ -954,6 +990,9 @@ class MissionViewSet(viewsets.ModelViewSet):
                 'longitude': float(mission.destination_longitude),
                 'address': mission.destination_address,
             },
+            'checkpoints': MissionCheckpointSerializer(
+                mission.checkpoints.all(), many=True
+            ).data,
             'route': {
                 'total_points': total_points,
                 'points': route_points,

@@ -1,7 +1,15 @@
 from rest_framework import serializers
-from apps.fleet.models import Mission
+from apps.fleet.models import Mission, MissionCheckpoint
 from .vehicle import VehicleListSerializer
 from .driver import DriverListSerializer
+
+
+class MissionCheckpointSerializer(serializers.ModelSerializer):
+    """Serializer pour les points de passage"""
+
+    class Meta:
+        model = MissionCheckpoint
+        fields = ['id', 'order', 'address', 'latitude', 'longitude', 'notes']
 
 
 class MissionListSerializer(serializers.ModelSerializer):
@@ -11,6 +19,7 @@ class MissionListSerializer(serializers.ModelSerializer):
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     vehicle_plate = serializers.CharField(source='vehicle.license_plate', read_only=True)
     driver_name = serializers.CharField(source='driver.user.get_full_name', read_only=True)
+    checkpoint_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Mission
@@ -18,8 +27,12 @@ class MissionListSerializer(serializers.ModelSerializer):
             'id', 'mission_code', 'title', 'status', 'status_display',
             'priority', 'priority_display', 'vehicle_plate', 'driver_name',
             'scheduled_start', 'scheduled_end', 'actual_start', 'actual_end',
-            'origin_address', 'destination_address', 'estimated_distance'
+            'origin_address', 'destination_address', 'estimated_distance',
+            'checkpoint_count'
         ]
+
+    def get_checkpoint_count(self, obj):
+        return obj.checkpoints.count()
 
 
 class ActiveTripSerializer(serializers.Serializer):
@@ -43,6 +56,8 @@ class MissionSerializer(serializers.ModelSerializer):
     is_completed = serializers.BooleanField(read_only=True)
     duration = serializers.SerializerMethodField()
     active_trip = serializers.SerializerMethodField()
+    checkpoints = MissionCheckpointSerializer(many=True, read_only=True)
+    checkpoint_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Mission
@@ -67,9 +82,14 @@ class MissionSerializer(serializers.ModelSerializer):
             pass
         return None
 
+    def get_checkpoint_count(self, obj):
+        return obj.checkpoints.count()
+
 
 class MissionCreateSerializer(serializers.ModelSerializer):
     """Serializer pour création de mission"""
+
+    checkpoints = MissionCheckpointSerializer(many=True, required=False, default=[])
 
     class Meta:
         model = Mission
@@ -79,20 +99,38 @@ class MissionCreateSerializer(serializers.ModelSerializer):
             'origin_latitude', 'origin_longitude', 'destination_address',
             'destination_latitude', 'destination_longitude',
             'estimated_distance', 'priority', 'responsible_person_name',
-            'responsible_person_phone', 'notes'
+            'responsible_person_phone', 'notes', 'checkpoints'
         ]
 
     def validate(self, attrs):
         """Validations personnalisées"""
-        # Vérifier que le véhicule est disponible
         vehicle = attrs.get('vehicle')
-        if vehicle and vehicle.status != 'available':
+        driver = attrs.get('driver')
+        request = self.context.get('request')
+        user_org = request.user.organization if request and hasattr(request, 'user') else None
+
+        # Vérifier que le véhicule appartient à la même organisation
+        if vehicle and user_org and vehicle.organization != user_org:
             raise serializers.ValidationError({
-                'vehicle': 'Le véhicule sélectionné n\'est pas disponible.'
+                'vehicle': 'Ce véhicule n\'appartient pas à votre organisation.'
             })
 
+        # Vérifier que le chauffeur appartient à la même organisation
+        if driver and user_org and driver.organization != user_org:
+            raise serializers.ValidationError({
+                'driver': 'Ce chauffeur n\'appartient pas à votre organisation.'
+            })
+
+        # Vérifier que le véhicule est disponible
+        # Accepter aussi 'in_use' si c'est le véhicule déjà assigné au chauffeur sélectionné
+        if vehicle and vehicle.status != 'available':
+            is_driver_vehicle = driver and hasattr(driver, 'current_vehicle') and driver.current_vehicle == vehicle
+            if not is_driver_vehicle:
+                raise serializers.ValidationError({
+                    'vehicle': 'Le véhicule sélectionné n\'est pas disponible.'
+                })
+
         # Vérifier que le chauffeur est disponible
-        driver = attrs.get('driver')
         if driver and driver.status != 'available':
             raise serializers.ValidationError({
                 'driver': 'Le chauffeur sélectionné n\'est pas disponible.'
@@ -107,6 +145,8 @@ class MissionCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        checkpoints_data = validated_data.pop('checkpoints', [])
+
         # Définir le créateur
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
@@ -121,6 +161,10 @@ class MissionCreateSerializer(serializers.ModelSerializer):
             validated_data['status'] = 'assigned'
 
         mission = Mission.objects.create(**validated_data)
+
+        # Créer les checkpoints
+        for cp_data in checkpoints_data:
+            MissionCheckpoint.objects.create(mission=mission, **cp_data)
 
         # Mettre à jour les statuts si véhicule et chauffeur sont assignés
         if vehicle and driver:

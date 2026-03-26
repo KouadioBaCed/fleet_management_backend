@@ -67,7 +67,7 @@ class GPSLocationPoint(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         verbose_name='Niveau batterie'
     )
-    is_moving = models.BooleanField(default=True, verbose_name='En mouvement')
+    is_moving = models.BooleanField(default=True, verbose_name='Mission')
 
     class Meta:
         db_table = 'gps_location_points'

@@ -103,6 +103,18 @@ class Vehicle(models.Model):
         blank=True,
         verbose_name='Kilométrage prochaine maintenance'
     )
+    maintenance_frequency_km = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Frequence de maintenance en km (ex: 10000)',
+        verbose_name='Frequence maintenance (km)'
+    )
+    maintenance_frequency_months = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Frequence de maintenance en mois (ex: 6)',
+        verbose_name='Frequence maintenance (mois)'
+    )
 
     # Assurance
     insurance_number = models.CharField(
@@ -152,3 +164,22 @@ class Vehicle(models.Model):
         if self.next_maintenance_mileage:
             return self.current_mileage >= self.next_maintenance_mileage
         return False
+
+    @property
+    def next_maintenance_date(self):
+        """Date estimee de la prochaine maintenance basee sur la frequence en mois"""
+        from dateutil.relativedelta import relativedelta
+        if self.last_maintenance_date and self.maintenance_frequency_months:
+            return self.last_maintenance_date + relativedelta(months=self.maintenance_frequency_months)
+        return None
+
+    @property
+    def maintenance_overdue(self):
+        """Verifier si la maintenance est en retard (par date ou km)"""
+        from django.utils import timezone
+        overdue_km = self.needs_maintenance
+        overdue_date = False
+        nmd = self.next_maintenance_date
+        if nmd:
+            overdue_date = timezone.now().date() >= nmd
+        return overdue_km or overdue_date

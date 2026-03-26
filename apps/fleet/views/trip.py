@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
-from apps.fleet.models import Trip, TripPause
+from apps.fleet.models import Trip, TripPause, TripStop
 from apps.fleet.serializers import (
     TripSerializer,
     TripCreateSerializer,
@@ -156,6 +156,68 @@ class TripViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
                 'trip': TripSerializer(trip).data
             })
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def report_stop(self, request, pk=None):
+        """Enregistrer un arret detecte pendant le trajet"""
+        trip = self.get_object()
+
+        if trip.status not in ['active', 'paused']:
+            return Response(
+                {'error': 'Le trajet doit etre actif pour enregistrer un arret'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        reason = request.data.get('reason', 'other')
+        valid_reasons = [c[0] for c in TripStop.REASON_CHOICES]
+        if reason not in valid_reasons:
+            return Response(
+                {'error': f'Raison invalide. Choix: {valid_reasons}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        stop = TripStop.objects.create(
+            trip=trip,
+            reason=reason,
+            notes=request.data.get('notes', ''),
+            stopped_at=request.data.get('stopped_at', timezone.now()),
+            duration_seconds=request.data.get('duration_seconds', 0),
+            latitude=request.data.get('latitude'),
+            longitude=request.data.get('longitude'),
+        )
+
+        return Response({
+            'id': stop.id,
+            'reason': stop.reason,
+            'reason_display': stop.get_reason_display(),
+            'notes': stop.notes,
+            'stopped_at': stop.stopped_at.isoformat(),
+            'duration_seconds': stop.duration_seconds,
+            'latitude': float(stop.latitude) if stop.latitude else None,
+            'longitude': float(stop.longitude) if stop.longitude else None,
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'])
+    def stops(self, request, pk=None):
+        """Recuperer l'historique des arrets du trajet"""
+        trip = self.get_object()
+        stops = trip.stops.all().order_by('-stopped_at')
+
+        stops_data = [{
+            'id': s.id,
+            'reason': s.reason,
+            'reason_display': s.get_reason_display(),
+            'notes': s.notes,
+            'stopped_at': s.stopped_at.isoformat(),
+            'duration_seconds': s.duration_seconds,
+            'latitude': float(s.latitude) if s.latitude else None,
+            'longitude': float(s.longitude) if s.longitude else None,
+        } for s in stops]
+
+        return Response({
+            'stops': stops_data,
+            'stops_count': len(stops_data),
+        })
 
     @action(detail=True, methods=['get'])
     def route(self, request, pk=None):

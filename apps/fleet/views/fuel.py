@@ -16,6 +16,14 @@ class FuelRecordViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     queryset = FuelRecord.objects.select_related('vehicle', 'driver', 'trip').all()
     permission_classes = [IsAuthenticated, IsOrganizationMember]
 
+    def create(self, request, *args, **kwargs):
+        """Override create pour logger les erreurs de validation"""
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print(f"[FUEL CREATE ERROR] Data: {request.data}")
+            print(f"[FUEL CREATE ERROR] Errors: {serializer.errors}")
+        return super().create(request, *args, **kwargs)
+
     def get_serializer_class(self):
         if self.action == 'create':
             return FuelRecordCreateSerializer
@@ -159,23 +167,23 @@ class FuelRecordViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Assigner l'organisation"""
-        # Calculer la distance depuis le dernier plein
         vehicle = serializer.validated_data['vehicle']
-        mileage = serializer.validated_data['mileage_at_refuel']
+        mileage = serializer.validated_data.get('mileage_at_refuel', 0)
 
         distance = None
-        last_refuel = FuelRecord.objects.filter(
-            vehicle=vehicle,
-            is_full_tank=True
-        ).order_by('-refuel_date').first()
+        if mileage and float(mileage) > 0:
+            last_refuel = FuelRecord.objects.filter(
+                vehicle=vehicle,
+                is_full_tank=True
+            ).order_by('-refuel_date').first()
 
-        if last_refuel:
-            distance = float(mileage) - float(last_refuel.mileage_at_refuel)
+            if last_refuel and float(mileage) > float(last_refuel.mileage_at_refuel):
+                distance = float(mileage) - float(last_refuel.mileage_at_refuel)
 
-        # Mettre à jour le kilométrage du véhicule
-        if float(mileage) > float(vehicle.current_mileage):
-            vehicle.current_mileage = mileage
-            vehicle.save()
+            # Mettre à jour le kilométrage du véhicule
+            if float(mileage) > float(vehicle.current_mileage):
+                vehicle.current_mileage = mileage
+                vehicle.save()
 
         serializer.save(
             organization=self.request.user.organization,

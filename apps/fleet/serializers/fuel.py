@@ -22,6 +22,10 @@ class FuelRecordSerializer(serializers.ModelSerializer):
 class FuelRecordCreateSerializer(serializers.ModelSerializer):
     """Serializer pour créer un ravitaillement"""
 
+    quantity = serializers.DecimalField(max_digits=6, decimal_places=2, required=False, default=0)
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=3, required=False, default=0)
+    mileage_at_refuel = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
+
     class Meta:
         model = FuelRecord
         fields = [
@@ -34,7 +38,6 @@ class FuelRecordCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """Validations"""
-        # Vérifier que le type de carburant correspond au véhicule
         vehicle = attrs.get('vehicle')
         fuel_type = attrs.get('fuel_type')
 
@@ -44,8 +47,13 @@ class FuelRecordCreateSerializer(serializers.ModelSerializer):
             })
 
         # Calculer le coût total si pas fourni
-        if 'total_cost' not in attrs and 'quantity' in attrs and 'unit_price' in attrs:
+        if 'total_cost' not in attrs and attrs.get('quantity') and attrs.get('unit_price'):
             attrs['total_cost'] = attrs['quantity'] * attrs['unit_price']
+
+        # Si quantity et unit_price sont 0, calculer depuis total_cost
+        if attrs.get('total_cost') and attrs.get('unit_price') and not attrs.get('quantity'):
+            from decimal import Decimal
+            attrs['quantity'] = attrs['total_cost'] / attrs['unit_price']
 
         return attrs
 

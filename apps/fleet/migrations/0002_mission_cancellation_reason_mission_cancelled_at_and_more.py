@@ -106,7 +106,7 @@ class Migration(migrations.Migration):
             name='MissionAlert',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('alert_type', models.CharField(choices=[('delay_start', 'Retard au demarrage'), ('delay_progress', 'Retard en cours'), ('delay_arrival', "Retard a l'arrivee"), ('route_deviation', 'Deviation de route'), ('long_stop', 'Arret prolonge'), ('speed_violation', 'Exces de vitesse'), ('geofence_exit', 'Sortie de zone')], max_length=30, verbose_name="Type d'alerte")),
+                ('alert_type', models.CharField(choices=[('delay_start', 'Retard au demarrage'), ('delay_progress', 'Retard en cours'), ('delay_arrival', "Retard à l'arrivée"), ('route_deviation', 'Deviation de route'), ('long_stop', 'Arret prolonge'), ('speed_violation', 'Exces de vitesse'), ('geofence_exit', 'Sortie de zone')], max_length=30, verbose_name="Type d'alerte")),
                 ('severity', models.CharField(choices=[('info', 'Information'), ('warning', 'Avertissement'), ('critical', 'Critique')], default='warning', max_length=20, verbose_name='Severite')),
                 ('title', models.CharField(max_length=200, verbose_name='Titre')),
                 ('message', models.TextField(verbose_name='Message')),

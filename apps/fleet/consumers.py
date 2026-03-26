@@ -57,7 +57,7 @@ class LiveTrackingConsumer(AsyncWebsocketConsumer):
         now = timezone.now()
         active_missions = Mission.objects.filter(
             status='in_progress'
-        ).select_related('vehicle', 'driver', 'driver__user')
+        ).select_related('vehicle', 'driver', 'driver__user').prefetch_related('checkpoints')
 
         vehicles = []
         for mission in active_missions:
@@ -125,6 +125,17 @@ class LiveTrackingConsumer(AsyncWebsocketConsumer):
                 'scheduled_start': mission.scheduled_start.isoformat() if mission.scheduled_start else None,
                 'scheduled_end': mission.scheduled_end.isoformat() if mission.scheduled_end else None,
                 'actual_start': mission.actual_start.isoformat() if mission.actual_start else None,
+                'checkpoints': [
+                    {
+                        'id': cp.id,
+                        'order': cp.order,
+                        'address': cp.address,
+                        'latitude': float(cp.latitude),
+                        'longitude': float(cp.longitude),
+                        'notes': cp.notes or '',
+                    }
+                    for cp in mission.checkpoints.all().order_by('order')
+                ],
                 'delay_status': delay_status,
             })
 

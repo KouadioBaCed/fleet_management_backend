@@ -9,6 +9,7 @@ class VehicleListSerializer(serializers.ModelSerializer):
     vehicle_type_display = serializers.CharField(source='get_vehicle_type_display', read_only=True)
     fuel_type_display = serializers.CharField(source='get_fuel_type_display', read_only=True)
     needs_maintenance = serializers.BooleanField(read_only=True)
+    maintenance_overdue = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Vehicle
@@ -16,6 +17,8 @@ class VehicleListSerializer(serializers.ModelSerializer):
             'id', 'license_plate', 'brand', 'model', 'year',
             'vehicle_type', 'vehicle_type_display', 'status',
             'status_display', 'current_mileage', 'needs_maintenance',
+            'maintenance_overdue', 'maintenance_frequency_km', 'maintenance_frequency_months',
+            'last_maintenance_date', 'next_maintenance_mileage',
             'photo', 'fuel_type', 'fuel_type_display', 'color',
             'fuel_capacity', 'fuel_consumption', 'vin_number',
             'insurance_number', 'insurance_expiry', 'gps_device_id', 'notes'
@@ -30,6 +33,8 @@ class VehicleSerializer(serializers.ModelSerializer):
     fuel_type_display = serializers.CharField(source='get_fuel_type_display', read_only=True)
     is_available = serializers.BooleanField(read_only=True)
     needs_maintenance = serializers.BooleanField(read_only=True)
+    maintenance_overdue = serializers.BooleanField(read_only=True)
+    next_maintenance_date = serializers.DateField(read_only=True, allow_null=True)
 
     class Meta:
         model = Vehicle
@@ -43,6 +48,9 @@ class VehicleCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         exclude = ['created_at', 'updated_at']
+        extra_kwargs = {
+            'organization': {'required': False, 'allow_null': True},
+        }
 
     def validate_license_plate(self, value):
         """Valider que la plaque est unique"""

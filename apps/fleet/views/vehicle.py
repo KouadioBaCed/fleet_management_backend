@@ -3,11 +3,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Count
-from apps.fleet.models import Vehicle
+from apps.fleet.models import Vehicle, VehicleDocument
 from apps.fleet.serializers import (
     VehicleSerializer,
     VehicleListSerializer,
-    VehicleCreateSerializer
+    VehicleCreateSerializer,
+    VehicleDocumentSerializer,
+    DocumentAlertSerializer,
 )
 from apps.fleet.mixins import OrganizationFilterMixin
 from apps.accounts.permissions import IsOrganizationMember
@@ -281,4 +283,73 @@ class VehicleViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
         vehicle.save()
 
         serializer = VehicleSerializer(vehicle)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def send_maintenance_alerts(self, request):
+        """Declencher manuellement la verification des maintenances et l'envoi d'alertes"""
+        from apps.fleet.tasks import check_maintenance_alerts
+        result = check_maintenance_alerts()
+        return Response({'message': result})
+
+    # ── Vehicle Documents ──────────────────────────────────────────
+
+    @action(detail=True, methods=['get', 'post'], url_path='documents')
+    def documents(self, request, pk=None):
+        """Liste ou création de documents pour un véhicule"""
+        vehicle = self.get_object()
+
+        if request.method == 'GET':
+            docs = vehicle.documents.all()
+            serializer = VehicleDocumentSerializer(docs, many=True, context={'request': request})
+            return Response(serializer.data)
+
+        # POST
+        serializer = VehicleDocumentSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save(vehicle=vehicle)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['put', 'delete'], url_path='documents/(?P<doc_id>[^/.]+)')
+    def document_detail(self, request, pk=None, doc_id=None):
+        """Modification ou suppression d'un document"""
+        vehicle = self.get_object()
+        try:
+            doc = vehicle.documents.get(id=doc_id)
+        except VehicleDocument.DoesNotExist:
+            return Response({'error': 'Document non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            doc.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        # PUT
+        serializer = VehicleDocumentSerializer(doc, data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='document-alerts')
+    def document_alerts(self, request):
+        """Alertes pour les documents expirés ou expirant bientôt"""
+        org_vehicles = self.get_queryset()
+        docs = VehicleDocument.objects.filter(vehicle__in=org_vehicles)
+
+        alerts = []
+        for doc in docs:
+            if doc.status in ('expired', 'expiring_soon'):
+                alerts.append({
+                    'id': doc.id,
+                    'vehicle_id': doc.vehicle_id,
+                    'vehicle_plate': doc.vehicle.license_plate,
+                    'vehicle_brand': doc.vehicle.brand,
+                    'vehicle_model': doc.vehicle.model,
+                    'document_type': doc.document_type,
+                    'document_number': doc.document_number,
+                    'expiry_date': doc.expiry_date,
+                    'days_until_expiry': doc.days_until_expiry,
+                    'status': doc.status,
+                })
+
+        serializer = DocumentAlertSerializer(alerts, many=True)
         return Response(serializer.data)

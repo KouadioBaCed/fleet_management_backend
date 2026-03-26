@@ -272,7 +272,7 @@ class Migration(migrations.Migration):
                 ('heading', models.DecimalField(blank=True, decimal_places=2, help_text='Direction en degrés', max_digits=5, null=True, validators=[django.core.validators.MinValueValidator(0), django.core.validators.MaxValueValidator(360)], verbose_name='Cap')),
                 ('recorded_at', models.DateTimeField(verbose_name='Enregistré à')),
                 ('battery_level', models.IntegerField(blank=True, null=True, validators=[django.core.validators.MinValueValidator(0), django.core.validators.MaxValueValidator(100)], verbose_name='Niveau batterie')),
-                ('is_moving', models.BooleanField(default=True, verbose_name='En mouvement')),
+                ('is_moving', models.BooleanField(default=True, verbose_name='Mission')),
                 ('trip', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='location_points', to='fleet.trip', verbose_name='Trajet')),
             ],
             options={

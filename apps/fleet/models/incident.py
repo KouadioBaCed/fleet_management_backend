@@ -107,6 +107,21 @@ class Incident(models.Model):
         verbose_name='Photo 3'
     )
 
+    # Facture / preuve de réparation
+    repair_invoice = models.FileField(
+        upload_to='incidents/invoices/',
+        null=True,
+        blank=True,
+        verbose_name='Facture de réparation'
+    )
+    repair_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Coût de réparation'
+    )
+
     # Résolution
     is_resolved = models.BooleanField(
         default=False,

@@ -292,7 +292,7 @@ def signup_initiate_view(request):
 
     POST /api/auth/signup/initiate/
     Body: {
-        "email": "user@example.com",
+        "email": "utilisateur@rewisecar.com",
         "first_name": "John",
         "last_name": "Doe",
         "organization_name": "Ma Société"

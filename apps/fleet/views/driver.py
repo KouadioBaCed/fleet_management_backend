@@ -80,10 +80,13 @@ class DriverViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Filtrer par statut
+        # Filtrer par statut (supporte les valeurs multiples separees par virgule)
         status_filter = self.request.query_params.get('status')
-        if status_filter and status_filter in ['available', 'on_mission', 'on_break', 'off_duty']:
-            queryset = queryset.filter(status=status_filter)
+        if status_filter:
+            valid_statuses = ['available', 'on_mission', 'on_break', 'off_duty']
+            statuses = [s.strip() for s in status_filter.split(',') if s.strip() in valid_statuses]
+            if statuses:
+                queryset = queryset.filter(status__in=statuses)
 
         # Recherche par nom, prénom, employee_id ou numéro de permis
         search = self.request.query_params.get('search')

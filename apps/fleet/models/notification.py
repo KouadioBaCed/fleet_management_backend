@@ -138,7 +138,7 @@ class UserNotification(models.Model):
         ('fuel_anomaly', 'Anomalie carburant'),
         # Missions
         ('mission_completed', 'Mission terminee'),
-        ('mission_delayed', 'Mission en retard'),
+        ('mission_delayed', 'Mission accompli'),
         # Drivers
         ('driver_license_expiring', 'Permis conducteur expire bientot'),
         ('driver_document_expiring', 'Document conducteur expire bientot'),
@@ -454,8 +454,15 @@ class NotificationService:
 
         # Si pas d'utilisateurs specifies, notifier tous les admins de l'organisation
         if users is None:
+            organization = None
+            if incident.vehicle:
+                organization = incident.vehicle.organization
+            elif incident.organization:
+                organization = incident.organization
+            if not organization:
+                return []
             users = User.objects.filter(
-                organization=incident.vehicle.organization if incident.vehicle else None,
+                organization=organization,
                 role__in=['admin', 'supervisor'],
                 is_active=True
             )
@@ -485,7 +492,7 @@ class NotificationService:
                     'severity': incident.severity,
                     'vehicle_plate': incident.vehicle.license_plate if incident.vehicle else None,
                     'driver_name': str(incident.driver) if incident.driver else None,
-                    'location': incident.location,
+                    'location': incident.address or f"{incident.latitude}, {incident.longitude}",
                 },
             )
             notifications.append(notification)
@@ -508,8 +515,15 @@ class NotificationService:
         from apps.accounts.models import User
 
         if users is None:
+            organization = None
+            if incident.vehicle:
+                organization = incident.vehicle.organization
+            elif incident.organization:
+                organization = incident.organization
+            if not organization:
+                return []
             users = User.objects.filter(
-                organization=incident.vehicle.organization if incident.vehicle else None,
+                organization=organization,
                 role__in=['admin', 'supervisor'],
                 is_active=True
             )

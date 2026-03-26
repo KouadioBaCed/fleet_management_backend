@@ -140,7 +140,7 @@ class IncidentViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
-        """Résoudre un incident"""
+        """Résoudre un incident avec preuves (facture, coût)"""
         from apps.fleet.models.notification import NotificationService
 
         incident = self.get_object()
@@ -152,6 +152,10 @@ class IncidentViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
         incident.resolution_notes = request.data.get('resolution_notes', '')
         if request.data.get('estimated_cost'):
             incident.estimated_cost = request.data.get('estimated_cost')
+        if request.data.get('repair_cost'):
+            incident.repair_cost = request.data.get('repair_cost')
+        if request.FILES.get('repair_invoice'):
+            incident.repair_invoice = request.FILES['repair_invoice']
         incident.save()
 
         # Notifier les admins/superviseurs que l'incident a ete resolu
@@ -189,6 +193,17 @@ class IncidentViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def analytics(self, request):
         """Analyse des incidents avec période, répartition par type/gravité et coûts"""
+        try:
+            return self._analytics_data(request)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'detail': f'Erreur lors du calcul des analyses: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _analytics_data(self, request):
         # Paramètres
         period = request.query_params.get('period', 'month')
         start_date = request.query_params.get('start_date')
@@ -351,14 +366,16 @@ class IncidentViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
                 'severity': incident.severity,
                 'severity_display': incident.get_severity_display(),
                 'vehicle_plate': incident.vehicle.license_plate if incident.vehicle else None,
-                'driver_name': f"{incident.driver.first_name} {incident.driver.last_name}" if incident.driver else None,
+                'driver_name': incident.driver.full_name if incident.driver else None,
                 'cost': float(incident.estimated_cost) if incident.estimated_cost else None,
                 'is_resolved': incident.is_resolved,
                 'reported_at': incident.reported_at.isoformat()
             })
 
         # ===== TOP VÉHICULES PAR INCIDENTS =====
-        vehicle_incidents = incidents_period.values(
+        vehicle_incidents = incidents_period.filter(
+            vehicle__isnull=False
+        ).values(
             'vehicle_id',
             'vehicle__license_plate',
             'vehicle__brand',
@@ -378,10 +395,12 @@ class IncidentViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
         } for v in vehicle_incidents]
 
         # ===== TOP CONDUCTEURS PAR INCIDENTS =====
-        driver_incidents = incidents_period.values(
+        driver_incidents = incidents_period.filter(
+            driver__isnull=False
+        ).values(
             'driver_id',
-            'driver__first_name',
-            'driver__last_name'
+            'driver__user__first_name',
+            'driver__user__last_name'
         ).annotate(
             count=Count('id'),
             total_cost=Sum('estimated_cost')
@@ -389,7 +408,7 @@ class IncidentViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
 
         top_drivers = [{
             'driver_id': d['driver_id'],
-            'name': f"{d['driver__first_name']} {d['driver__last_name']}",
+            'name': f"{d['driver__user__first_name']} {d['driver__user__last_name']}",
             'count': d['count'],
             'cost': float(d['total_cost'] or 0)
         } for d in driver_incidents]

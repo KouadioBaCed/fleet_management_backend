@@ -1,12 +1,13 @@
 from .vehicle import VehicleSerializer, VehicleListSerializer, VehicleCreateSerializer
 from .driver import DriverSerializer, DriverListSerializer, DriverCreateSerializer
-from .mission import MissionSerializer, MissionListSerializer, MissionCreateSerializer
+from .mission import MissionSerializer, MissionListSerializer, MissionCreateSerializer, MissionCheckpointSerializer
 from .trip import TripSerializer, TripCreateSerializer, TripUpdateSerializer
 from .gps import GPSLocationPointSerializer, GPSBatchSerializer
 from .incident import IncidentSerializer, IncidentCreateSerializer
 from .maintenance import MaintenanceRecordSerializer, MaintenanceRecordCreateSerializer
 from .fuel import FuelRecordSerializer, FuelRecordCreateSerializer
 from .activity import ActivitySerializer
+from .vehicle_document import VehicleDocumentSerializer, DocumentAlertSerializer
 from .notification import (
     DriverNotificationSerializer,
     UserNotificationSerializer,
@@ -24,6 +25,7 @@ __all__ = [
     'MissionSerializer',
     'MissionListSerializer',
     'MissionCreateSerializer',
+    'MissionCheckpointSerializer',
     'TripSerializer',
     'TripCreateSerializer',
     'TripUpdateSerializer',
@@ -40,4 +42,6 @@ __all__ = [
     'UserNotificationSerializer',
     'NotificationListSerializer',
     'MarkNotificationsReadSerializer',
+    'VehicleDocumentSerializer',
+    'DocumentAlertSerializer',
 ]
