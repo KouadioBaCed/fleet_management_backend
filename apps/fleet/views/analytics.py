@@ -305,7 +305,7 @@ def fleet_analytics(request):
             'id': drv.id,
             'full_name': drv.full_name,
             'employee_id': drv.employee_id,
-            'photo': drv.photo.url if drv.photo else None,
+            'photo': drv.user.profile_picture.url if drv.user.profile_picture else None,
             'status': drv.status,
             'rating': float(drv.rating),
             'total_missions': drv_missions_total,
