@@ -17,7 +17,7 @@ class Organization(models.Model):
     )
     slug = models.SlugField(
         max_length=100,
-        unique=True,
+        unique=True, 
         verbose_name='Identifiant unique'
     )
     logo = models.ImageField(
