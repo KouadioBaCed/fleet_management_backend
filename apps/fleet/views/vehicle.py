@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -13,6 +14,8 @@ from apps.fleet.serializers import (
 )
 from apps.fleet.mixins import OrganizationFilterMixin
 from apps.accounts.permissions import IsOrganizationMember
+
+logger = logging.getLogger(__name__)
 
 
 class VehicleViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
@@ -75,37 +78,53 @@ class VehicleViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
         return queryset
 
     def list(self, request, *args, **kwargs):
-        """Override list pour ajouter les statistiques"""
-        queryset = self.filter_queryset(self.get_queryset())
+        """Override list pour ajouter les statistiques.
 
-        # Calculer les stats par statut sur le queryset de base (sans filtre de statut)
-        base_queryset = super().get_queryset()
-        stats = base_queryset.values('status').annotate(count=Count('id'))
-        stats_dict = {
-            'total': base_queryset.count(),
-            'available': 0,
-            'in_use': 0,
-            'maintenance': 0,
-            'out_of_service': 0,
-        }
-        for stat in stats:
-            if stat['status'] in stats_dict:
-                stats_dict[stat['status']] = stat['count']
+        Robuste: log toute exception avec traceback complet et retourne un 500
+        avec un message JSON exploitable cote frontend (au lieu d'une page HTML).
+        """
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
 
-        # Pagination
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            response = self.get_paginated_response(serializer.data)
-            response.data['stats'] = stats_dict
-            return response
+            # Calculer les stats par statut sur le queryset de base (sans filtre de statut)
+            base_queryset = super().get_queryset()
+            stats = base_queryset.values('status').annotate(count=Count('id'))
+            stats_dict = {
+                'total': base_queryset.count(),
+                'available': 0,
+                'in_use': 0,
+                'maintenance': 0,
+                'out_of_service': 0,
+            }
+            for stat in stats:
+                if stat['status'] in stats_dict:
+                    stats_dict[stat['status']] = stat['count']
 
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'results': serializer.data,
-            'stats': stats_dict,
-            'count': queryset.count(),
-        })
+            # Pagination
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                response = self.get_paginated_response(serializer.data)
+                response.data['stats'] = stats_dict
+                return response
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'results': serializer.data,
+                'stats': stats_dict,
+                'count': queryset.count(),
+            })
+        except Exception as exc:
+            # Log la traceback complete cote serveur pour diagnostic
+            logger.exception('Vehicle list endpoint crashed: %s', exc)
+            return Response(
+                {
+                    'error': 'Erreur lors du chargement des vehicules',
+                    'detail': str(exc),
+                    'type': type(exc).__name__,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=False, methods=['get'])
     def available(self, request):

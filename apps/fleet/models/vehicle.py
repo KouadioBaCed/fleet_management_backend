@@ -161,25 +161,42 @@ class Vehicle(models.Model):
 
     @property
     def needs_maintenance(self):
-        if self.next_maintenance_mileage:
-            return self.current_mileage >= self.next_maintenance_mileage
-        return False
+        # Defensif: si la colonne next_maintenance_mileage n'existe pas en BDD
+        # (migration non appliquee) ou si une comparaison echoue, on retourne False
+        # plutot que de faire crasher la serialisation de toute la liste.
+        try:
+            nmm = getattr(self, 'next_maintenance_mileage', None)
+            if nmm is None:
+                return False
+            return self.current_mileage >= nmm
+        except Exception:
+            return False
 
     @property
     def next_maintenance_date(self):
-        """Date estimee de la prochaine maintenance basee sur la frequence en mois"""
-        from dateutil.relativedelta import relativedelta
-        if self.last_maintenance_date and self.maintenance_frequency_months:
-            return self.last_maintenance_date + relativedelta(months=self.maintenance_frequency_months)
-        return None
+        """Date estimee de la prochaine maintenance basee sur la frequence en mois.
+        Defensif: retourne None si les colonnes ne sont pas dispo ou en cas d'erreur."""
+        try:
+            from dateutil.relativedelta import relativedelta
+            lmd = getattr(self, 'last_maintenance_date', None)
+            mfm = getattr(self, 'maintenance_frequency_months', None)
+            if lmd and mfm:
+                return lmd + relativedelta(months=mfm)
+            return None
+        except Exception:
+            return None
 
     @property
     def maintenance_overdue(self):
-        """Verifier si la maintenance est en retard (par date ou km)"""
-        from django.utils import timezone
-        overdue_km = self.needs_maintenance
-        overdue_date = False
-        nmd = self.next_maintenance_date
-        if nmd:
-            overdue_date = timezone.now().date() >= nmd
-        return overdue_km or overdue_date
+        """Verifier si la maintenance est en retard (par date ou km).
+        Defensif: any error -> False."""
+        try:
+            from django.utils import timezone
+            overdue_km = self.needs_maintenance
+            overdue_date = False
+            nmd = self.next_maintenance_date
+            if nmd:
+                overdue_date = timezone.now().date() >= nmd
+            return overdue_km or overdue_date
+        except Exception:
+            return False
