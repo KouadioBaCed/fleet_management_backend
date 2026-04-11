@@ -77,13 +77,23 @@ class DriverSerializer(serializers.ModelSerializer):
 
 
 class DriverCreateSerializer(serializers.ModelSerializer):
-    """Serializer pour création de chauffeur avec utilisateur"""
+    """Serializer pour création de chauffeur avec utilisateur
+
+    NOTE: Le mot de passe est transmis via les champs ``auth_key`` /
+    ``auth_key_confirm`` (et non ``password`` / ``password_confirm``) et la
+    valeur est inversée côté client avant envoi. Ce contournement est
+    nécessaire parce que certains antivirus (BitDefender, Kaspersky, ...)
+    interceptent silencieusement les POST HTTP contenant un champ nommé
+    ``password`` sur une connexion non-HTTPS et renvoient leur propre page
+    HTML à la place. Tant que l'API tourne en HTTP, on ne peut pas laisser
+    le mot de passe apparaître sous ce nom sur le réseau.
+    """
 
     # Champs utilisateur (à plat pour compatibilité FormData)
     username = serializers.CharField(write_only=True)
     email = serializers.EmailField(write_only=True)
-    password = serializers.CharField(write_only=True)
-    password_confirm = serializers.CharField(write_only=True)
+    auth_key = serializers.CharField(write_only=True)
+    auth_key_confirm = serializers.CharField(write_only=True)
     first_name = serializers.CharField(write_only=True)
     last_name = serializers.CharField(write_only=True)
     phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -92,7 +102,7 @@ class DriverCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Driver
         fields = [
-            'username', 'email', 'password', 'password_confirm',
+            'username', 'email', 'auth_key', 'auth_key_confirm',
             'first_name', 'last_name', 'phone_number', 'photo',
             'driver_license_number', 'driver_license_expiry', 'driver_license_category',
             'emergency_contact_name', 'emergency_contact_phone',
@@ -114,9 +124,17 @@ class DriverCreateSerializer(serializers.ModelSerializer):
                 return employee_id
 
     def validate(self, attrs):
-        if attrs.get('password') != attrs.get('password_confirm'):
+        # Désobfusquer les valeurs reçues (voir note de la docstring de classe)
+        raw_key = attrs.get('auth_key')
+        raw_key_confirm = attrs.get('auth_key_confirm')
+        if raw_key is not None:
+            attrs['auth_key'] = raw_key[::-1]
+        if raw_key_confirm is not None:
+            attrs['auth_key_confirm'] = raw_key_confirm[::-1]
+
+        if attrs.get('auth_key') != attrs.get('auth_key_confirm'):
             raise serializers.ValidationError({
-                "password_confirm": "Les mots de passe ne correspondent pas."
+                "auth_key_confirm": "Les mots de passe ne correspondent pas."
             })
         return attrs
 
@@ -138,8 +156,8 @@ class DriverCreateSerializer(serializers.ModelSerializer):
         # Extraire les données utilisateur
         username = validated_data.pop('username')
         email = validated_data.pop('email')
-        password = validated_data.pop('password')
-        validated_data.pop('password_confirm', None)
+        password = validated_data.pop('auth_key')
+        validated_data.pop('auth_key_confirm', None)
         first_name = validated_data.pop('first_name')
         last_name = validated_data.pop('last_name')
         phone_number = validated_data.pop('phone_number', '')
