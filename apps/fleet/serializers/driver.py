@@ -187,7 +187,7 @@ class DriverCreateSerializer(serializers.ModelSerializer):
         if photo:
             user.profile_picture = photo
             user.save()
-
+ 
         # Générer automatiquement l'employee_id
         validated_data['employee_id'] = self.generate_employee_id(organization)
         validated_data['organization'] = organization
