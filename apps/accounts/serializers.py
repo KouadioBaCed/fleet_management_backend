@@ -202,31 +202,36 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return None
 
     def get_assigned_vehicle(self, obj):
-        """Retourne les informations du vehicule assigne si l'utilisateur est un chauffeur"""
+        """Retourne les informations du vehicule assigne si l'utilisateur est un chauffeur.
+
+        Tolerant aux champs nullables (current_mileage, vehicle_type, fuel_type peuvent etre
+        absents sur certains vehicules — on ne veut pas que ca fasse retourner None).
+        """
         if obj.role != 'driver':
             return None
 
         try:
-            driver = obj.driver_profile
-            vehicle = driver.current_vehicle
-
+            driver = getattr(obj, 'driver_profile', None)
+            if not driver:
+                return None
+            vehicle = getattr(driver, 'current_vehicle', None)
             if not vehicle:
                 return None
 
             return {
                 'id': vehicle.id,
                 'license_plate': vehicle.license_plate,
-                'brand': vehicle.brand,
-                'model': vehicle.model,
+                'brand': vehicle.brand or '',
+                'model': vehicle.model or '',
                 'year': vehicle.year,
-                'vehicle_type': vehicle.vehicle_type,
-                'vehicle_type_display': vehicle.get_vehicle_type_display(),
-                'color': vehicle.color,
-                'fuel_type': vehicle.fuel_type,
-                'fuel_type_display': vehicle.get_fuel_type_display(),
+                'vehicle_type': vehicle.vehicle_type or '',
+                'vehicle_type_display': vehicle.get_vehicle_type_display() if vehicle.vehicle_type else '',
+                'color': vehicle.color or '',
+                'fuel_type': vehicle.fuel_type or '',
+                'fuel_type_display': vehicle.get_fuel_type_display() if vehicle.fuel_type else '',
                 'status': vehicle.status,
-                'status_display': vehicle.get_status_display(),
-                'current_mileage': float(vehicle.current_mileage),
+                'status_display': vehicle.get_status_display() if vehicle.status else '',
+                'current_mileage': float(vehicle.current_mileage) if vehicle.current_mileage is not None else 0.0,
                 'photo': vehicle.photo.url if vehicle.photo else None,
             }
         except Exception:
