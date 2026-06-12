@@ -1,4 +1,5 @@
 -r base.txt
 
-# Serveur WSGI/ASGI de production
-gunicorn==21.2.0
+# Serveur WSGI (optionnel : la prod tourne sous daphne/ASGI).
+# Borne basse uniquement pour ne jamais retrograder une version deja installee.
+gunicorn>=21.2.0

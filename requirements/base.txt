@@ -1,7 +1,10 @@
 # Core Django
-Django==5.0.1
-djangorestframework==3.14.0
+# NB: versions alignees sur l'environnement de production reellement deploye.
+# Ne pas retrograder Django sous 5.2 : django-filter>=25 l'exige.
+Django==5.2.4
+djangorestframework==3.17.1
 django-cors-headers==4.3.1
+django-filter==25.2
 
 # Database
 psycopg2-binary==2.9.9
@@ -25,7 +28,7 @@ Pillow==10.1.0
 python-decouple==3.8
 
 # API documentation
-drf-yasg==1.21.7
+drf-yasg==1.21.15
 
 # Timezone
 pytz==2023.3

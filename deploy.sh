@@ -18,12 +18,14 @@
 set -euo pipefail
 
 # --- Configuration -------------------------------------------------------
-# Module de settings utilise en production.
-export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.production}"
+# Module de settings pour les commandes de gestion (migrate/collectstatic).
+# 'base' est sur : meme base de donnees que le service, sans garde-fou
+# SECRET_KEY ni dependance dev. Le SERVICE, lui, garde son propre module.
+export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.base}"
 # Nom du service systemd qui lance daphne (mettre "" si tu redemarres a la main).
 SERVICE_NAME="${SERVICE_NAME:-dunamis-backend}"
-# Fichier de requirements a installer.
-REQ_FILE="requirements/production.txt"
+# Fichier de requirements a installer (daphne/ASGI -> base suffit).
+REQ_FILE="requirements/base.txt"
 # -------------------------------------------------------------------------
 
 echo "==> [1/6] Sauvegarde du .env"
