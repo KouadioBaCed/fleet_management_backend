@@ -8,7 +8,8 @@ from decimal import Decimal
 import csv
 from django.http import HttpResponse
 from apps.fleet.models import Vehicle, Driver, FuelRecord, MaintenanceRecord, Trip, Incident, Mission
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, RequireModule
+from apps.accounts.modules import Modules
 
 
 def get_date_range(period, start_date=None, end_date=None):
@@ -49,7 +50,7 @@ def get_previous_period_range(start_date, end_date):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsOrganizationMember])
+@permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.REPORTS)])
 def reports_summary(request):
     """Récupère un résumé complet pour les rapports avec filtres"""
     organization = request.user.organization
@@ -341,7 +342,7 @@ def reports_summary(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsOrganizationMember])
+@permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.REPORTS)])
 def export_csv(request):
     """Export des données en CSV"""
     organization = request.user.organization
@@ -486,7 +487,7 @@ def export_csv(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsOrganizationMember])
+@permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.REPORTS)])
 def export_json(request):
     """Export des données en JSON (pour Excel via Power Query ou traitement externe)"""
     organization = request.user.organization

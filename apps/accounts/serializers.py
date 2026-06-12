@@ -14,6 +14,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
     vehicle_count = serializers.ReadOnlyField()
     driver_count = serializers.ReadOnlyField()
     active_mission_count = serializers.ReadOnlyField()
+    modules = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -21,9 +22,12 @@ class OrganizationSerializer(serializers.ModelSerializer):
             'id', 'name', 'slug', 'logo', 'address', 'city', 'country',
             'phone', 'email', 'website', 'is_active', 'subscription_type',
             'max_vehicles', 'max_drivers', 'vehicle_count', 'driver_count',
-            'active_mission_count', 'created_at', 'updated_at'
+            'active_mission_count', 'modules', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
+
+    def get_modules(self, obj):
+        return obj.get_enabled_module_codes()
 
 
 class OrganizationCreateSerializer(serializers.ModelSerializer):
@@ -48,9 +52,15 @@ class OrganizationCreateSerializer(serializers.ModelSerializer):
 class OrganizationMinimalSerializer(serializers.ModelSerializer):
     """Serializer minimal pour l'organisation (utilisé dans les réponses)"""
 
+    modules = serializers.SerializerMethodField()
+
     class Meta:
         model = Organization
-        fields = ['id', 'name', 'slug', 'logo']
+        fields = ['id', 'name', 'slug', 'logo', 'modules']
+
+    def get_modules(self, obj):
+        """Codes des modules activés pour cette organisation."""
+        return obj.get_enabled_module_codes()
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -130,6 +140,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     full_name = serializers.SerializerMethodField()
     organization = OrganizationMinimalSerializer(read_only=True)
+    modules = serializers.SerializerMethodField()
     driver_license = serializers.SerializerMethodField()
     assigned_vehicle = serializers.SerializerMethodField()
     active_missions = serializers.SerializerMethodField()
@@ -140,14 +151,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'full_name', 'role', 'phone_number', 'profile_picture',
-            'is_active_duty', 'organization', 'driver_license', 'assigned_vehicle',
-            'active_missions', 'statistics'
+            'is_active_duty', 'organization', 'modules', 'driver_license',
+            'assigned_vehicle', 'active_missions', 'statistics'
         ]
         read_only_fields = [
-            'id', 'username', 'role', 'organization', 'driver_license',
+            'id', 'username', 'role', 'organization', 'modules', 'driver_license',
             'assigned_vehicle', 'active_missions', 'statistics', 'full_name',
             'is_active_duty'
         ]
+
+    def get_modules(self, obj):
+        """Liste des modules autorisés pour l'organisation de l'utilisateur.
+
+        Exposée au premier niveau de ``/me/`` pour piloter dynamiquement
+        l'interface (web + mobile)."""
+        if not obj.organization:
+            return []
+        return obj.organization.get_enabled_module_codes()
 
     def to_representation(self, instance):
         """Convertit l'URL de la photo de profil en URL absolue"""
@@ -377,13 +397,18 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'is_active_duty': self.user.is_active_duty,
         }
 
+        # Modules autorisés pour l'organisation (pilote l'UI web + mobile)
+        enabled_modules = self.user.organization.get_enabled_module_codes()
+
         # Ajouter les informations de l'organisation
         data['organization'] = {
             'id': str(self.user.organization.id),
             'name': self.user.organization.name,
             'slug': self.user.organization.slug,
             'logo': self.user.organization.logo.url if self.user.organization.logo else None,
+            'modules': enabled_modules,
         }
+        data['modules'] = enabled_modules
 
         return data
 

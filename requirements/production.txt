@@ -1,0 +1,4 @@
+-r base.txt
+
+# Serveur WSGI/ASGI de production
+gunicorn==21.2.0

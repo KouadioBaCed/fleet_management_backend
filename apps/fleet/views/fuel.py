@@ -8,13 +8,15 @@ from datetime import datetime, timedelta
 from apps.fleet.models import FuelRecord
 from apps.fleet.serializers import FuelRecordSerializer, FuelRecordCreateSerializer
 from apps.fleet.mixins import OrganizationFilterMixin
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, HasOrganizationModule
+from apps.accounts.modules import Modules
 
 
 class FuelRecordViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     """ViewSet pour gérer les ravitaillements (filtré par organisation)"""
     queryset = FuelRecord.objects.select_related('vehicle', 'driver', 'trip').all()
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    required_module = Modules.FUEL
+    permission_classes = [IsAuthenticated, IsOrganizationMember, HasOrganizationModule]
 
     def create(self, request, *args, **kwargs):
         """Override create pour logger les erreurs de validation"""

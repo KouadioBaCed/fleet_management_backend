@@ -9,7 +9,8 @@ from decimal import Decimal
 from apps.fleet.models import Incident
 from apps.fleet.serializers import IncidentSerializer, IncidentCreateSerializer
 from apps.fleet.mixins import OrganizationFilterMixin
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, HasOrganizationModule
+from apps.accounts.modules import Modules
 
 
 def get_date_range(period, start_date=None, end_date=None):
@@ -49,7 +50,8 @@ def get_previous_period(start_date, end_date):
 class IncidentViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     """ViewSet pour gérer les incidents (filtré par organisation)"""
     queryset = Incident.objects.select_related('trip', 'driver', 'vehicle', 'resolved_by').all()
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    required_module = Modules.INCIDENTS
+    permission_classes = [IsAuthenticated, IsOrganizationMember, HasOrganizationModule]
 
     def get_serializer_class(self):
         if self.action == 'create':

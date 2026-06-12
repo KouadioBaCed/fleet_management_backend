@@ -1,6 +1,63 @@
 from rest_framework import permissions
 
 
+class HasOrganizationModule(permissions.BasePermission):
+    """Vérifie que l'organisation de l'utilisateur a accès au module requis.
+
+    Le module requis est déterminé par, dans l'ordre :
+      1. ``self.module_code`` (défini par la fabrique :func:`RequireModule`,
+         pratique pour les vues fonctionnelles) ;
+      2. l'attribut ``required_module`` de la vue (pratique pour les ViewSets).
+
+    Si aucun module n'est requis, la permission est accordée (pas de gating).
+    Si l'organisation ne possède pas le module, l'accès est refusé (HTTP 403).
+
+    Cette vérification est la **garantie de sécurité côté serveur** : même si le
+    frontend masque l'interface, l'API reste protégée.
+    """
+
+    module_code = None
+    message = "Votre organisation n'a pas accès à ce module."
+
+    def _required_module(self, view):
+        return self.module_code or getattr(view, 'required_module', None)
+
+    def has_permission(self, request, view):
+        required = self._required_module(view)
+        if not required:
+            return True
+
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return False
+
+        organization = getattr(user, 'organization', None)
+        if not organization or not organization.is_active:
+            return False
+
+        return organization.has_module(required)
+
+    def has_object_permission(self, request, view, obj):
+        # La vérification au niveau objet est identique à celle de la vue :
+        # l'accès au module conditionne l'accès à toutes ses ressources.
+        return self.has_permission(request, view)
+
+
+def RequireModule(code):
+    """Fabrique une classe de permission liée à un module précis.
+
+    Idéale pour les vues fonctionnelles ou ``APIView``::
+
+        @permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.TRACKING)])
+        def track_location(request): ...
+    """
+    return type(
+        f'RequireModule_{code}',
+        (HasOrganizationModule,),
+        {'module_code': code},
+    )
+
+
 class IsAuthenticated(permissions.BasePermission):
     """
     Permission de base : utilisateur authentifié

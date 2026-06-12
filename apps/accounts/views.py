@@ -344,7 +344,7 @@ def signup_initiate_view(request):
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🚗 YaswaCar</h1>
+                    <h1>🚗 YaswaCar</h1>    
                 </div>
                 <div class="content">
                     <h2>Bonjour {first_name} {last_name},</h2>

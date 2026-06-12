@@ -8,13 +8,15 @@ from datetime import datetime, timedelta
 from apps.fleet.models import MaintenanceRecord, Vehicle
 from apps.fleet.serializers import MaintenanceRecordSerializer, MaintenanceRecordCreateSerializer
 from apps.fleet.mixins import OrganizationFilterMixin
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, HasOrganizationModule
+from apps.accounts.modules import Modules
 
 
 class MaintenanceRecordViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     """ViewSet pour gérer les maintenances (filtré par organisation)"""
     queryset = MaintenanceRecord.objects.select_related('vehicle', 'created_by').all()
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    required_module = Modules.MAINTENANCE
+    permission_classes = [IsAuthenticated, IsOrganizationMember, HasOrganizationModule]
 
     def get_serializer_class(self):
         if self.action == 'create':

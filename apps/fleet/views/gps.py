@@ -2,6 +2,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from apps.accounts.permissions import IsOrganizationMember, RequireModule
+from apps.accounts.modules import Modules
 from apps.fleet.models import GPSLocationPoint, Vehicle
 from apps.fleet.serializers import GPSLocationPointSerializer, GPSBatchSerializer
 from channels.layers import get_channel_layer
@@ -9,7 +11,7 @@ from asgiref.sync import async_to_sync
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.TRACKING)])
 def track_location(request):
     """Enregistrer un point GPS"""
     serializer = GPSLocationPointSerializer(data=request.data)
@@ -56,7 +58,7 @@ def track_location(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.TRACKING)])
 def batch_track_location(request):
     """Enregistrer plusieurs points GPS en batch"""
     points_data = request.data.get('points', [])
@@ -111,7 +113,7 @@ def batch_track_location(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.TRACKING)])
 def live_positions(request):
     """Récupérer les dernières positions de tous les véhicules actifs de l'organisation"""
     from apps.fleet.models import Trip

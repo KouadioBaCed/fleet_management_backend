@@ -11,7 +11,8 @@ from apps.fleet.serializers import (
     MissionCreateSerializer,
     MissionCheckpointSerializer
 )
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, HasOrganizationModule
+from apps.accounts.modules import Modules
 
 
 class MissionViewSet(viewsets.ModelViewSet):
@@ -25,7 +26,8 @@ class MissionViewSet(viewsets.ModelViewSet):
     - ordering: Tri (scheduled_start, -scheduled_start, created_at, -created_at, priority)
     """
     queryset = Mission.objects.select_related('vehicle', 'driver', 'driver__user', 'created_by', 'trip').prefetch_related('checkpoints').all()
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    required_module = Modules.MISSIONS
+    permission_classes = [IsAuthenticated, IsOrganizationMember, HasOrganizationModule]
 
     def get_serializer_class(self):
         if self.action == 'list':

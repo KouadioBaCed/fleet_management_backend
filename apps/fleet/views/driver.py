@@ -13,7 +13,8 @@ from apps.fleet.serializers import (
     DriverCreateSerializer
 )
 from apps.fleet.mixins import OrganizationFilterMixin
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, HasOrganizationModule
+from apps.accounts.modules import Modules
 
 
 def get_analytics_date_range(period, start_date=None, end_date=None):
@@ -61,7 +62,8 @@ class DriverViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     - ordering: Tri (full_name, employee_id, rating, total_trips, -created_at, etc.)
     """
     queryset = Driver.objects.select_related('user', 'current_vehicle').all()
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    required_module = Modules.DRIVERS
+    permission_classes = [IsAuthenticated, IsOrganizationMember, HasOrganizationModule]
 
     def get_serializer_context(self):
         """Ajouter l'organisation au contexte du serializer"""

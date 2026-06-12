@@ -6,7 +6,8 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
 from apps.fleet.models import Vehicle, FuelRecord, MaintenanceRecord, Trip, Incident, Driver
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, RequireModule
+from apps.accounts.modules import Modules
 
 
 def get_date_range(period, start_date=None, end_date=None):
@@ -44,7 +45,7 @@ def get_previous_period_range(start_date, end_date):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsOrganizationMember])
+@permission_classes([IsAuthenticated, IsOrganizationMember, RequireModule(Modules.ANALYTICS)])
 def fleet_analytics(request):
     """Analyse complète de la flotte avec période, consommation par véhicule et coûts"""
     organization = request.user.organization

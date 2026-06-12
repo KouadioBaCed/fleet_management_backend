@@ -13,7 +13,8 @@ from apps.fleet.serializers import (
     DocumentAlertSerializer,
 )
 from apps.fleet.mixins import OrganizationFilterMixin
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, HasOrganizationModule
+from apps.accounts.modules import Modules
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,8 @@ class VehicleViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     - ordering: Tri (license_plate, brand, year, -created_at, etc.)
     """
     queryset = Vehicle.objects.all()
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    required_module = Modules.VEHICLES
+    permission_classes = [IsAuthenticated, IsOrganizationMember, HasOrganizationModule]
 
     def get_serializer_class(self):
         if self.action == 'list':

@@ -10,13 +10,15 @@ from apps.fleet.serializers import (
     TripUpdateSerializer
 )
 from apps.fleet.mixins import OrganizationFilterMixin
-from apps.accounts.permissions import IsOrganizationMember
+from apps.accounts.permissions import IsOrganizationMember, HasOrganizationModule
+from apps.accounts.modules import Modules
 
 
 class TripViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
     """ViewSet pour gérer les trajets (filtré par organisation)"""
     queryset = Trip.objects.select_related('mission', 'vehicle', 'driver').all()
-    permission_classes = [IsAuthenticated, IsOrganizationMember]
+    required_module = Modules.TRACKING
+    permission_classes = [IsAuthenticated, IsOrganizationMember, HasOrganizationModule]
 
     def get_serializer_class(self):
         if self.action == 'create':

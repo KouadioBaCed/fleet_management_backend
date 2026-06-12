@@ -3,6 +3,51 @@ from django.db import models
 import uuid
 
 
+class Module(models.Model):
+    """Module fonctionnel de la plateforme (incidents, véhicules, etc.).
+
+    La liste canonique des modules est définie dans ``apps.accounts.modules``.
+    Cette table en est le reflet en base, ce qui permet de gérer l'activation
+    par organisation via une relation Many-to-Many et de l'administrer
+    directement depuis l'admin Django.
+    """
+
+    code = models.SlugField(
+        max_length=50,
+        unique=True,
+        verbose_name='Code',
+        help_text="Identifiant technique du module (ex: incidents, vehicles)."
+    )
+    name = models.CharField(
+        max_length=100,
+        verbose_name='Nom'
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name='Description'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='Disponible globalement',
+        help_text="Décocher pour retirer ce module de toute la plateforme."
+    )
+    order = models.PositiveIntegerField(
+        default=100,
+        verbose_name="Ordre d'affichage"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'modules'
+        verbose_name = 'Module'
+        verbose_name_plural = 'Modules'
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
 class Organization(models.Model):
     """Modèle représentant une organisation/entreprise utilisant le système"""
 
@@ -11,7 +56,7 @@ class Organization(models.Model):
         default=uuid.uuid4,
         editable=False
     )
-    name = models.CharField(
+    name = models.CharField( 
         max_length=255,
         verbose_name='Nom de l\'organisation'
     )
@@ -76,6 +121,14 @@ class Organization(models.Model):
         default=10,
         verbose_name='Nombre max de conducteurs'
     )
+    modules = models.ManyToManyField(
+        'accounts.Module',
+        related_name='organizations',
+        blank=True,
+        verbose_name='Modules activés',
+        help_text="Modules auxquels cette organisation a accès. "
+                  "Une organisation peut par exemple n'avoir que le module 'incidents'."
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Date de création'
@@ -105,6 +158,20 @@ class Organization(models.Model):
     @property
     def active_mission_count(self):
         return self.missions.filter(status='in_progress').count()
+
+    def get_enabled_module_codes(self):
+        """Liste des codes de modules activés ET globalement disponibles."""
+        return list(
+            self.modules.filter(is_active=True)
+            .order_by('order', 'name')
+            .values_list('code', flat=True)
+        )
+
+    def has_module(self, code):
+        """Indique si l'organisation a accès au module ``code``."""
+        if not code:
+            return False
+        return self.modules.filter(code=code, is_active=True).exists()
 
 
 class User(AbstractUser):

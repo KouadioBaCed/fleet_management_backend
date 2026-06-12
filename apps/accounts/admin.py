@@ -1,15 +1,34 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import Organization, User, UserPreferences, EmailVerificationToken
+from .models import Organization, User, UserPreferences, EmailVerificationToken, Module
+
+
+@admin.register(Module)
+class ModuleAdmin(admin.ModelAdmin):
+    list_display = ['name', 'code', 'is_active', 'order', 'organization_count']
+    list_filter = ['is_active']
+    search_fields = ['name', 'code', 'description']
+    ordering = ['order', 'name']
+    readonly_fields = ['created_at', 'updated_at']
+
+    @admin.display(description="Organisations")
+    def organization_count(self, obj):
+        return obj.organizations.count()
 
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug', 'email', 'phone', 'is_active', 'subscription_type', 'created_at']
-    list_filter = ['is_active', 'subscription_type', 'created_at']
+    list_display = ['name', 'slug', 'email', 'phone', 'is_active', 'subscription_type', 'enabled_modules', 'created_at']
+    list_filter = ['is_active', 'subscription_type', 'modules', 'created_at']
     search_fields = ['name', 'slug', 'email']
     readonly_fields = ['id', 'created_at', 'updated_at']
+    filter_horizontal = ['modules']
     ordering = ['-created_at']
+
+    @admin.display(description="Modules activés")
+    def enabled_modules(self, obj):
+        codes = obj.get_enabled_module_codes()
+        return ", ".join(codes) if codes else "—"
 
  
 @admin.register(User)

@@ -9,13 +9,15 @@ from datetime import timedelta
 from apps.fleet.models import Vehicle, Driver, Mission, Incident, Activity
 from apps.fleet.serializers import ActivitySerializer
 from apps.fleet.services import DriverPerformanceService
+from apps.accounts.permissions import IsOrganizationMember, RequireModule
+from apps.accounts.modules import Modules
 
 
 class DashboardStatsView(APIView):
     """
     Vue pour les statistiques du tableau de bord
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrganizationMember, RequireModule(Modules.DASHBOARD)]
 
     def get(self, request):
         user = request.user
@@ -166,7 +168,7 @@ class ActivityListView(generics.ListAPIView):
     - limit: Nombre d'activités à retourner (défaut: 20, max: 100)
     - since: Activités depuis cette date (format ISO)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrganizationMember, RequireModule(Modules.DASHBOARD)]
     serializer_class = ActivitySerializer
 
     def get_queryset(self):
@@ -214,7 +216,7 @@ class ActivityTypesView(APIView):
     """
     Liste des types d'activités disponibles
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrganizationMember, RequireModule(Modules.DASHBOARD)]
 
     def get(self, request):
         return Response({
@@ -237,7 +239,7 @@ class DriverRankingView(APIView):
     - limit: Nombre de chauffeurs à retourner (défaut: 10, max: 50)
     - period: Période en jours pour les calculs (défaut: 30)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrganizationMember, RequireModule(Modules.ANALYTICS)]
 
     def get(self, request):
         user = request.user
@@ -272,7 +274,7 @@ class TopPerformersView(APIView):
     """
     Top 5 des meilleurs chauffeurs (version simplifiée pour le dashboard)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrganizationMember, RequireModule(Modules.DASHBOARD)]
 
     def get(self, request):
         user = request.user
@@ -297,7 +299,7 @@ class DriverPerformanceDetailView(APIView):
     """
     Détails de performance d'un chauffeur spécifique
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrganizationMember, RequireModule(Modules.ANALYTICS)]
 
     def get(self, request, driver_id):
         user = request.user
