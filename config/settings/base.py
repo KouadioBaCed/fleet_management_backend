@@ -9,7 +9,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Security
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-production')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.69.211,192.168.68.186,192.168.137.1,89.116.31.78', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.69.211,192.168.68.186,192.168.137.1,89.116.31.78,fleet.dfleetci.com,pro.dfleetci.com', cast=lambda v: [s.strip() for s in v.split(',')])
+
+# CSRF trusted origins (required by Django 4+ for the admin and any POST form served under the domain).
+# Includes both the backend host and the frontend origin.
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='https://fleet.dfleetci.com,https://pro.dfleetci.com',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
+)
 
 # Application definition
 INSTALLED_APPS = [
@@ -151,7 +159,7 @@ SIMPLE_JWT = {
 # CORS Settings
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:3000,http://192.168.69.211:5173,http://192.168.69.211:5176',
+    default='http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:3000,http://192.168.69.211:5173,http://192.168.69.211:5176,https://pro.dfleetci.com,https://fleet.dfleetci.com',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
 CORS_ALLOW_CREDENTIALS = True
@@ -191,4 +199,12 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Rewise Car <noreply@rewisecar.com>')
 
 # Frontend URL for email links
-FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5176')
+FRONTEND_URL = config('FRONTEND_URL', default='https://pro.dfleetci.com')
+
+# HTTPS / Production security
+# Behind the nginx reverse proxy, this header lets Django know the original request was HTTPS.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# Cookie & redirect hardening — disabled by default (dev), enabled via .env in production.
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
