@@ -165,6 +165,72 @@ class DriverViewSet(OrganizationFilterMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @action(detail=False, methods=['post'], url_path='register-push-token')
+    def register_push_token(self, request):
+        """Enregistrer (ou réactiver) le jeton de notification push du chauffeur connecté.
+
+        Body attendu : { "token": "ExponentPushToken[...]", "platform": "android" }
+        """
+        from apps.fleet.models import DriverPushToken
+
+        try:
+            driver = Driver.objects.get(user=request.user)
+        except Driver.DoesNotExist:
+            return Response(
+                {'detail': 'Profil chauffeur non trouvé pour cet utilisateur.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        token = (request.data.get('token') or '').strip()
+        platform = request.data.get('platform') or 'unknown'
+
+        if not token:
+            return Response(
+                {'error': 'token est requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if platform not in dict(DriverPushToken.PLATFORM_CHOICES):
+            platform = 'unknown'
+
+        # Upsert : un même jeton ne doit appartenir qu'à un seul chauffeur.
+        push_token, _created = DriverPushToken.objects.update_or_create(
+            token=token,
+            defaults={
+                'driver': driver,
+                'platform': platform,
+                'is_active': True,
+                'last_used_at': timezone.now(),
+            }
+        )
+
+        return Response({
+            'message': 'Jeton push enregistré',
+            'id': push_token.id,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='unregister-push-token')
+    def unregister_push_token(self, request):
+        """Désactiver un jeton push (ex: à la déconnexion).
+
+        Body attendu : { "token": "ExponentPushToken[...]" }
+        """
+        from apps.fleet.models import DriverPushToken
+
+        token = (request.data.get('token') or '').strip()
+        if not token:
+            return Response(
+                {'error': 'token est requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        DriverPushToken.objects.filter(
+            token=token,
+            driver__user=request.user
+        ).update(is_active=False)
+
+        return Response({'message': 'Jeton push désactivé'}, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Récupérer les statistiques globales des chauffeurs"""

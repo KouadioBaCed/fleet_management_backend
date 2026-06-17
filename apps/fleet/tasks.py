@@ -5,6 +5,68 @@ from django.conf import settings
 from datetime import timedelta
 
 
+# Fenetre (en minutes) avant le debut d'une mission pour envoyer le rappel.
+MISSION_REMINDER_WINDOW_MINUTES = 30
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, ignore_result=True)
+def send_driver_push_notification(self, notification_id):
+    """Envoie (en asynchrone) le push Expo lie a une DriverNotification.
+
+    Charge la notification puis delegue au service.
+    """
+    from apps.fleet.models import DriverNotification, NotificationService
+
+    try:
+        notification = DriverNotification.objects.select_related('driver').get(id=notification_id)
+    except DriverNotification.DoesNotExist:
+        return f"Notification {notification_id} introuvable"
+
+    NotificationService._send_driver_push(notification)
+    return f"Push traite pour notification {notification_id}"
+
+
+@shared_task(ignore_result=True)
+def send_mission_reminders():
+    """Envoie un rappel aux chauffeurs dont la mission demarre bientot.
+
+    Cible les missions 'assigned' dont scheduled_start tombe dans la fenetre
+    [maintenant, maintenant + WINDOW]. Evite les doublons en verifiant qu'aucun
+    rappel n'a deja ete cree pour la mission. A planifier via Celery Beat
+    (toutes les ~5 minutes).
+    """
+    from apps.fleet.models import Mission, DriverNotification, NotificationService
+
+    now = timezone.now()
+    window_end = now + timedelta(minutes=MISSION_REMINDER_WINDOW_MINUTES)
+
+    missions = Mission.objects.filter(
+        status='assigned',
+        driver__isnull=False,
+        scheduled_start__gt=now,
+        scheduled_start__lte=window_end,
+    ).select_related('driver')
+
+    reminders_sent = 0
+    for mission in missions:
+        # Eviter les doublons : un seul rappel par mission.
+        already_reminded = DriverNotification.objects.filter(
+            mission=mission,
+            notification_type='reminder',
+        ).exists()
+        if already_reminded:
+            continue
+
+        minutes_before = max(1, int((mission.scheduled_start - now).total_seconds() / 60))
+        NotificationService.notify_mission_reminder(
+            mission=mission,
+            minutes_before=minutes_before,
+        )
+        reminders_sent += 1
+
+    return f"{reminders_sent} rappel(s) de mission envoye(s)"
+
+
 @shared_task
 def check_maintenance_alerts():
     """

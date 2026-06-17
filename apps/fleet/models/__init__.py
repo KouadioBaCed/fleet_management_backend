@@ -13,6 +13,7 @@ from .activity import Activity
 from .mission_alert import MissionAlert
 from .vehicle_document import VehicleDocument
 from .notification import DriverNotification, UserNotification, NotificationService
+from .push_token import DriverPushToken
 
 __all__ = [
     'Vehicle',
@@ -32,4 +33,5 @@ __all__ = [
     'DriverNotification',
     'UserNotification',
     'NotificationService',
+    'DriverPushToken',
 ]

@@ -151,10 +151,19 @@ class MissionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Assigner automatiquement l'organisation et le créateur"""
-        serializer.save(
+        mission = serializer.save(
             organization=self.request.user.organization,
             created_by=self.request.user
         )
+
+        # Si la mission est créée avec un chauffeur déjà assigné, le notifier
+        # (push Expo) comme lors d'une assignation via l'action assign/.
+        if mission.driver:
+            from apps.fleet.models import NotificationService
+            NotificationService.notify_mission_assigned(
+                mission=mission,
+                created_by=self.request.user
+            )
 
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):

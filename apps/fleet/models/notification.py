@@ -314,6 +314,72 @@ class NotificationService:
             print(f"Error sending realtime notification: {e}")
 
     @staticmethod
+    def _dispatch_driver_push(notification):
+        """Declenche l'envoi du push.
+
+        Par defaut SYNCHRONE : le push part pendant la requete, sans dependre
+        d'un worker Celery (l'appel HTTP a Expo est best-effort et deja tolerant
+        aux pannes). C'est le mode sur lorsqu'aucun worker ne tourne.
+
+        Si PUSH_SEND_ASYNC=True est defini dans les settings (et qu'un worker
+        Celery + Beat tourne), l'envoi est delegue a la tache asynchrone.
+        """
+        from django.conf import settings
+
+        if getattr(settings, 'PUSH_SEND_ASYNC', False):
+            try:
+                from apps.fleet.tasks import send_driver_push_notification
+                send_driver_push_notification.delay(notification.id)
+                return
+            except Exception as e:
+                # Broker injoignable : on bascule sur l'envoi immediat.
+                print(f"Celery indisponible, envoi push synchrone: {e}")
+
+        NotificationService._send_driver_push(notification)
+
+    @staticmethod
+    def _send_driver_push(notification):
+        """Envoyer une notification push (Expo) au conducteur concerne.
+
+        Recupere tous les jetons actifs du chauffeur et envoie le push.
+        Met a jour push_sent/push_sent_at. Tolerant aux pannes : une erreur
+        d'envoi ne doit jamais interrompre le flux metier appelant.
+        """
+        try:
+            from apps.fleet.push import send_expo_push
+
+            driver = notification.driver
+            if not driver:
+                return
+
+            tokens = list(
+                driver.push_tokens.filter(is_active=True).values_list('token', flat=True)
+            )
+            if not tokens:
+                return
+
+            data = dict(notification.data or {})
+            data.setdefault('type', notification.notification_type)
+            data.setdefault('notification_id', notification.id)
+
+            priority = 'high' if notification.priority in ('high', 'urgent') else 'default'
+
+            sent = send_expo_push(
+                tokens=tokens,
+                title=notification.title,
+                body=notification.message,
+                data=data,
+                priority=priority,
+            )
+
+            if sent:
+                notification.push_sent = True
+                notification.push_sent_at = timezone.now()
+                notification.save(update_fields=['push_sent', 'push_sent_at'])
+        except Exception as e:
+            print(f"Error sending driver push notification: {e}")
+
+    @staticmethod
     def notify_mission_assigned(mission, created_by=None):
         """Notifier le conducteur qu'une mission lui a ete assignee"""
         notification = DriverNotification.objects.create(
@@ -334,13 +400,14 @@ class NotificationService:
             },
             created_by=created_by,
         )
+        NotificationService._dispatch_driver_push(notification)
         return notification
 
     @staticmethod
     def notify_mission_updated(mission, changes, created_by=None):
         """Notifier le conducteur que sa mission a ete modifiee"""
         changes_text = ', '.join(changes) if changes else 'des informations'
-        return DriverNotification.objects.create(
+        notification = DriverNotification.objects.create(
             driver=mission.driver,
             notification_type='mission_updated',
             priority='normal',
@@ -355,11 +422,13 @@ class NotificationService:
             },
             created_by=created_by,
         )
+        NotificationService._dispatch_driver_push(notification)
+        return notification
 
     @staticmethod
     def notify_mission_cancelled(mission, reason, created_by=None):
         """Notifier le conducteur que sa mission a ete annulee"""
-        return DriverNotification.objects.create(
+        notification = DriverNotification.objects.create(
             driver=mission.driver,
             notification_type='mission_cancelled',
             priority='urgent',
@@ -374,11 +443,13 @@ class NotificationService:
             },
             created_by=created_by,
         )
+        NotificationService._dispatch_driver_push(notification)
+        return notification
 
     @staticmethod
     def notify_mission_reminder(mission, minutes_before, created_by=None):
         """Rappel avant le debut de la mission"""
-        return DriverNotification.objects.create(
+        notification = DriverNotification.objects.create(
             driver=mission.driver,
             notification_type='reminder',
             priority='high',
@@ -393,6 +464,8 @@ class NotificationService:
             },
             created_by=created_by,
         )
+        NotificationService._dispatch_driver_push(notification)
+        return notification
 
     # === Notifications pour les admins/superviseurs ===
 

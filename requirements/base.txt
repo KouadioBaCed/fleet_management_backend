@@ -35,3 +35,7 @@ pytz==2023.3
 
 # Utilities
 python-dateutil==2.8.2
+
+# Importe par config/settings/development.py, qui est le module charge par
+# le service gunicorn en production (config.wsgi). Doit donc etre installe.
+django-extensions==3.2.3

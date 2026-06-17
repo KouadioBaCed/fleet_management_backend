@@ -188,6 +188,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.fleet.tasks.check_maintenance_alerts',
         'schedule': 86400.0,  # Every 24 hours (in seconds)
     },
+    'send-mission-reminders': {
+        'task': 'apps.fleet.tasks.send_mission_reminders',
+        'schedule': 300.0,  # Toutes les 5 minutes
+    },
 }
 
 # Email Configuration
