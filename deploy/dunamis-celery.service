@@ -1,0 +1,23 @@
+; Worker Celery — execute les taches (envoi des push de rappel).
+; Installer : sudo cp dunamis-celery.service /etc/systemd/system/
+;             sudo systemctl daemon-reload && sudo systemctl enable --now dunamis-celery
+; Adapter User, WorkingDirectory et le chemin du venv (ExecStart) a ton infra.
+
+[Unit]
+Description=Dunamis Celery Worker
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/chemin/vers/backend
+Environment=DJANGO_SETTINGS_MODULE=config.settings.base
+; Si tu utilises un .env, charge-le :
+EnvironmentFile=/chemin/vers/backend/.env
+ExecStart=/chemin/vers/backend/venv/bin/celery -A config worker -l info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

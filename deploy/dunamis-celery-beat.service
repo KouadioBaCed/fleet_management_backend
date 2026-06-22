@@ -1,0 +1,26 @@
+; Celery Beat — planificateur. C'est LUI qui declenche send_mission_reminders
+; toutes les 5 min (rappel 15 min avant + rappel a l'heure du depart).
+; Sans ce service, AUCUN rappel de mission ne part.
+; Installer : sudo cp dunamis-celery-beat.service /etc/systemd/system/
+;             sudo systemctl daemon-reload && sudo systemctl enable --now dunamis-celery-beat
+; Adapter User, WorkingDirectory et le chemin du venv (ExecStart) a ton infra.
+
+[Unit]
+Description=Dunamis Celery Beat (planificateur)
+After=network.target redis.service
+; Le worker doit tourner pour executer ce que Beat planifie.
+Wants=dunamis-celery.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/chemin/vers/backend
+Environment=DJANGO_SETTINGS_MODULE=config.settings.base
+EnvironmentFile=/chemin/vers/backend/.env
+ExecStart=/chemin/vers/backend/venv/bin/celery -A config beat -l info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

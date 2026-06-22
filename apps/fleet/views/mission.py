@@ -165,6 +165,62 @@ class MissionViewSet(viewsets.ModelViewSet):
                 created_by=self.request.user
             )
 
+    # Champs suivis pour notifier le chauffeur d'une modification (libellés FR).
+    NOTIFIABLE_FIELDS = {
+        'title': 'titre',
+        'description': 'description',
+        'origin_address': 'adresse de départ',
+        'destination_address': "adresse d'arrivée",
+        'scheduled_start': 'heure de départ',
+        'scheduled_end': "heure d'arrivée",
+        'estimated_distance': 'distance estimée',
+        'priority': 'priorité',
+        'notes': 'notes',
+        'driver': 'chauffeur',
+        'vehicle': 'véhicule',
+    }
+
+    def perform_update(self, serializer):
+        """Mettre à jour une mission ET notifier le chauffeur des changements.
+
+        Couvre les PUT/PATCH standards (ex: fiche d'édition web), pas seulement
+        l'action update_details/. On compare l'ancien et le nouvel état pour ne
+        notifier que sur de vrais changements de champs utiles au chauffeur.
+        """
+        from apps.fleet.models import Mission, NotificationService
+
+        # Etat AVANT modification (copie fraîche en base).
+        old = Mission.objects.get(pk=serializer.instance.pk)
+        old_values = {f: getattr(old, f) for f in self.NOTIFIABLE_FIELDS}
+
+        mission = serializer.save()
+
+        changes = [
+            label for field, label in self.NOTIFIABLE_FIELDS.items()
+            if str(old_values[field]) != str(getattr(mission, field))
+        ]
+
+        # Notifier seulement si la mission est suivie par un chauffeur.
+        if changes and mission.driver and mission.status in ['assigned', 'in_progress']:
+            NotificationService.notify_mission_updated(
+                mission=mission,
+                changes=changes,
+                created_by=self.request.user,
+            )
+
+    def perform_destroy(self, instance):
+        """Supprimer une mission ET prévenir le chauffeur si elle le concernait."""
+        from apps.fleet.models import NotificationService
+
+        # Notifier AVANT la suppression (la mission doit encore exister).
+        if instance.driver and instance.status in ['assigned', 'in_progress']:
+            NotificationService.notify_mission_deleted(
+                mission=instance,
+                created_by=self.request.user,
+            )
+
+        instance.delete()
+
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
         """Démarrer une mission"""
@@ -406,12 +462,12 @@ class MissionViewSet(viewsets.ModelViewSet):
         field_labels = {
             'title': 'titre',
             'description': 'description',
-            'origin_address': 'adresse de depart',
-            'destination_address': 'adresse d\'arrivee',
-            'scheduled_start': 'heure de depart',
-            'scheduled_end': 'heure d\'arrivee',
-            'estimated_distance': 'distance estimee',
-            'priority': 'priorite',
+            'origin_address': 'adresse de départ',
+            'destination_address': 'adresse d\'arrivée',
+            'scheduled_start': 'heure de départ',
+            'scheduled_end': 'heure d\'arrivée',
+            'estimated_distance': 'distance estimée',
+            'priority': 'priorité',
             'notes': 'notes',
         }
 
@@ -631,15 +687,15 @@ class MissionViewSet(viewsets.ModelViewSet):
 
         # Creer une nouvelle alerte
         alert_messages = {
-            'start': f"La mission n'a pas demarre a l'heure prevue. Retard: {delay_status['delay_minutes']} minutes.",
-            'progress': f"La mission a demarre en retard de {delay_status['delay_minutes']} minutes.",
-            'arrival': f"La mission depasse l'heure d'arrivee prevue de {delay_status['delay_minutes']} minutes.",
+            'start': f"La mission n'a pas démarré à l'heure prévue. Retard : {delay_status['delay_minutes']} minutes.",
+            'progress': f"La mission a démarré en retard de {delay_status['delay_minutes']} minutes.",
+            'arrival': f"La mission dépasse l'heure d'arrivée prévue de {delay_status['delay_minutes']} minutes.",
         }
 
         alert_titles = {
-            'start': "Retard au demarrage",
-            'progress': "Mission accompli",
-            'arrival': "Retard a l'arrivee",
+            'start': "Retard au démarrage",
+            'progress': "Démarrage en retard",
+            'arrival': "Retard à l'arrivée",
         }
 
         MissionAlert.objects.create(
@@ -647,7 +703,7 @@ class MissionViewSet(viewsets.ModelViewSet):
             alert_type=f"delay_{delay_status['delay_type']}",
             severity=delay_status['severity'],
             title=alert_titles.get(delay_status['delay_type'], 'Alerte retard'),
-            message=alert_messages.get(delay_status['delay_type'], 'Retard detecte'),
+            message=alert_messages.get(delay_status['delay_type'], 'Retard détecté'),
             delay_minutes=delay_status['delay_minutes'],
         )
 

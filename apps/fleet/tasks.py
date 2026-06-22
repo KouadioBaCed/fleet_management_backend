@@ -5,8 +5,12 @@ from django.conf import settings
 from datetime import timedelta
 
 
-# Fenetre (en minutes) avant le debut d'une mission pour envoyer le rappel.
-MISSION_REMINDER_WINDOW_MINUTES = 30
+# Combien de minutes avant le depart on envoie le rappel anticipe.
+REMINDER_BEFORE_MINUTES = 15
+# Tolerance (en minutes) apres l'heure de depart pour rattraper le rappel
+# "a l'heure" si un tick de Celery Beat a ete manque. Doit etre >= periode du
+# beat (5 min) pour ne jamais rater un depart.
+AT_START_GRACE_MINUTES = 10
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, ignore_result=True)
@@ -26,43 +30,77 @@ def send_driver_push_notification(self, notification_id):
     return f"Push traite pour notification {notification_id}"
 
 
+def _send_reminder_once(mission, kind, minutes_before):
+    """Envoie un rappel d'un 'kind' donne s'il n'a pas deja ete envoye.
+
+    Retourne 1 si un rappel a ete envoye, 0 sinon.
+    """
+    from apps.fleet.models import DriverNotification, NotificationService
+
+    already_sent = DriverNotification.objects.filter(
+        mission=mission,
+        notification_type='reminder',
+        data__reminder_kind=kind,
+    ).exists()
+    if already_sent:
+        return 0
+
+    NotificationService.notify_mission_reminder(
+        mission=mission,
+        minutes_before=minutes_before,
+        kind=kind,
+    )
+    return 1
+
+
 @shared_task(ignore_result=True)
 def send_mission_reminders():
-    """Envoie un rappel aux chauffeurs dont la mission demarre bientot.
+    """Envoie deux rappels aux chauffeurs autour du depart de leur mission.
 
-    Cible les missions 'assigned' dont scheduled_start tombe dans la fenetre
-    [maintenant, maintenant + WINDOW]. Evite les doublons en verifiant qu'aucun
-    rappel n'a deja ete cree pour la mission. A planifier via Celery Beat
-    (toutes les ~5 minutes).
+    - "before"   : ~REMINDER_BEFORE_MINUTES avant scheduled_start.
+    - "at_start" : a l'heure exacte du depart (avec une tolerance pour rattraper
+                   un tick de beat manque).
+
+    Chaque type n'est envoye qu'une fois par mission (anti-doublon via
+    data.reminder_kind). A planifier via Celery Beat (toutes les ~5 minutes).
+
+    DESACTIVE PAR DEFAUT : les rappels de depart sont assures cote MOBILE
+    (notifications locales programmees), qui fonctionnent app fermee sans
+    process serveur. Activer SERVER_SIDE_MISSION_REMINDERS=True dans les settings
+    seulement si l'on veut aussi un rappel push serveur (ex: couvrir le cas
+    "app jamais ouverte") -- au risque de doublonner avec le rappel local.
     """
-    from apps.fleet.models import Mission, DriverNotification, NotificationService
+    from django.conf import settings
+    from apps.fleet.models import Mission
+
+    if not getattr(settings, 'SERVER_SIDE_MISSION_REMINDERS', False):
+        return "Rappels serveur desactives (rappels locaux mobile utilises)"
 
     now = timezone.now()
-    window_end = now + timedelta(minutes=MISSION_REMINDER_WINDOW_MINUTES)
+    reminders_sent = 0
 
-    missions = Mission.objects.filter(
+    # 1) Rappel anticipe : depart dans (now, now + REMINDER_BEFORE_MINUTES].
+    before_window_end = now + timedelta(minutes=REMINDER_BEFORE_MINUTES)
+    before_missions = Mission.objects.filter(
         status='assigned',
         driver__isnull=False,
         scheduled_start__gt=now,
-        scheduled_start__lte=window_end,
+        scheduled_start__lte=before_window_end,
     ).select_related('driver')
-
-    reminders_sent = 0
-    for mission in missions:
-        # Eviter les doublons : un seul rappel par mission.
-        already_reminded = DriverNotification.objects.filter(
-            mission=mission,
-            notification_type='reminder',
-        ).exists()
-        if already_reminded:
-            continue
-
+    for mission in before_missions:
         minutes_before = max(1, int((mission.scheduled_start - now).total_seconds() / 60))
-        NotificationService.notify_mission_reminder(
-            mission=mission,
-            minutes_before=minutes_before,
-        )
-        reminders_sent += 1
+        reminders_sent += _send_reminder_once(mission, 'before', minutes_before)
+
+    # 2) Rappel a l'heure : depart dans (now - AT_START_GRACE_MINUTES, now].
+    at_start_window_start = now - timedelta(minutes=AT_START_GRACE_MINUTES)
+    at_start_missions = Mission.objects.filter(
+        status='assigned',
+        driver__isnull=False,
+        scheduled_start__lte=now,
+        scheduled_start__gt=at_start_window_start,
+    ).select_related('driver')
+    for mission in at_start_missions:
+        reminders_sent += _send_reminder_once(mission, 'at_start', 0)
 
     return f"{reminders_sent} rappel(s) de mission envoye(s)"
 

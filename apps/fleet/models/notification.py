@@ -10,14 +10,14 @@ class DriverNotification(models.Model):
     """Modele representant une notification pour un conducteur"""
 
     NOTIFICATION_TYPE_CHOICES = [
-        ('mission_assigned', 'Mission assignee'),
-        ('mission_updated', 'Mission modifiee'),
-        ('mission_cancelled', 'Mission annulee'),
-        ('mission_started', 'Mission demarree'),
-        ('mission_completed', 'Mission terminee'),
+        ('mission_assigned', 'Mission assignée'),
+        ('mission_updated', 'Mission modifiée'),
+        ('mission_cancelled', 'Mission annulée'),
+        ('mission_started', 'Mission démarrée'),
+        ('mission_completed', 'Mission terminée'),
         ('alert', 'Alerte'),
         ('reminder', 'Rappel'),
-        ('system', 'Systeme'),
+        ('system', 'Système'),
     ]
 
     PRIORITY_CHOICES = [
@@ -44,7 +44,7 @@ class DriverNotification(models.Model):
         max_length=20,
         choices=PRIORITY_CHOICES,
         default='normal',
-        verbose_name='Priorite'
+        verbose_name='Priorité'
     )
 
     title = models.CharField(max_length=200, verbose_name='Titre')
@@ -176,7 +176,7 @@ class UserNotification(models.Model):
         max_length=20,
         choices=PRIORITY_CHOICES,
         default='normal',
-        verbose_name='Priorite'
+        verbose_name='Priorité'
     )
 
     title = models.CharField(max_length=200, verbose_name='Titre')
@@ -386,9 +386,9 @@ class NotificationService:
             driver=mission.driver,
             notification_type='mission_assigned',
             priority='high',
-            title='Nouvelle mission assignee',
-            message=f"La mission '{mission.title}' ({mission.mission_code}) vous a ete assignee. "
-                    f"Depart prevu: {mission.scheduled_start.strftime('%d/%m/%Y a %H:%M')}.",
+            title='Nouvelle mission assignée',
+            message=f"La mission « {mission.title} » ({mission.mission_code}) vous a été assignée. "
+                    f"Départ prévu : {mission.scheduled_start.strftime('%d/%m/%Y à %H:%M')}.",
             mission=mission,
             data={
                 'mission_id': mission.id,
@@ -411,9 +411,9 @@ class NotificationService:
             driver=mission.driver,
             notification_type='mission_updated',
             priority='normal',
-            title='Mission modifiee',
-            message=f"La mission '{mission.title}' ({mission.mission_code}) a ete modifiee. "
-                    f"Changements: {changes_text}.",
+            title='Mission modifiée',
+            message=f"La mission « {mission.title} » ({mission.mission_code}) a été modifiée. "
+                    f"Changements : {changes_text}.",
             mission=mission,
             data={
                 'mission_id': mission.id,
@@ -432,9 +432,9 @@ class NotificationService:
             driver=mission.driver,
             notification_type='mission_cancelled',
             priority='urgent',
-            title='Mission annulee',
-            message=f"La mission '{mission.title}' ({mission.mission_code}) a ete annulee. "
-                    f"Motif: {reason}.",
+            title='Mission annulée',
+            message=f"La mission « {mission.title} » ({mission.mission_code}) a été annulée. "
+                    f"Motif : {reason}.",
             mission=mission,
             data={
                 'mission_id': mission.id,
@@ -447,20 +447,66 @@ class NotificationService:
         return notification
 
     @staticmethod
-    def notify_mission_reminder(mission, minutes_before, created_by=None):
-        """Rappel avant le debut de la mission"""
+    def notify_mission_deleted(mission, created_by=None):
+        """Notifier le conducteur que sa mission a été supprimée.
+
+        On réutilise le type 'mission_cancelled' (même icône côté mobile) car,
+        du point de vue du chauffeur, l'effet est identique : la mission disparaît.
+        À appeler AVANT la suppression effective (la notification doit exister et
+        le push partir tant que la mission est encore en base).
+        """
+        notification = DriverNotification.objects.create(
+            driver=mission.driver,
+            notification_type='mission_cancelled',
+            priority='urgent',
+            title='Mission supprimée',
+            message=f"La mission « {mission.title} » ({mission.mission_code}) a été supprimée. "
+                    f"Elle n'est plus à réaliser.",
+            mission=mission,
+            data={
+                'mission_id': mission.id,
+                'mission_code': mission.mission_code,
+                'deleted': True,
+            },
+            created_by=created_by,
+        )
+        NotificationService._dispatch_driver_push(notification)
+        return notification
+
+    @staticmethod
+    def notify_mission_reminder(mission, minutes_before, kind='before', created_by=None):
+        """Rappel lie au debut de la mission.
+
+        kind='before'   -> rappel anticipe (ex: 15 min avant le depart).
+        kind='at_start'  -> rappel a l'heure exacte du depart.
+        Le 'kind' est stocke dans data pour permettre les deux rappels sans
+        que l'anti-doublon ne bloque le second.
+        """
+        if kind == 'at_start':
+            title = "C'est l'heure de démarrer"
+            message = (
+                f"La mission « {mission.title} » ({mission.mission_code}) doit démarrer maintenant. "
+                f"Origine : {mission.origin_address}."
+            )
+        else:
+            title = 'Rappel de mission'
+            message = (
+                f"La mission « {mission.title} » ({mission.mission_code}) commence dans {minutes_before} minutes. "
+                f"Origine : {mission.origin_address}."
+            )
+
         notification = DriverNotification.objects.create(
             driver=mission.driver,
             notification_type='reminder',
             priority='high',
-            title='Rappel de mission',
-            message=f"La mission '{mission.title}' ({mission.mission_code}) commence dans {minutes_before} minutes. "
-                    f"Origine: {mission.origin_address}.",
+            title=title,
+            message=message,
             mission=mission,
             data={
                 'mission_id': mission.id,
                 'mission_code': mission.mission_code,
                 'minutes_before': minutes_before,
+                'reminder_kind': kind,
             },
             created_by=created_by,
         )
